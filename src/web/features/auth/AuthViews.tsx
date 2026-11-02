@@ -9,6 +9,7 @@ import VerifiedUserOutlined from "@mui/icons-material/VerifiedUserOutlined";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -16,11 +17,12 @@ import { Form, Formik, useFormikContext } from "formik";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { FormikCheckbox, FormikTextField } from "@web/components/form";
-import { IconTile, Logo, Muted, Num } from "@web/components/ui";
+import { FormikCheckbox, FormikPasswordField, FormikTextField } from "@web/components/form";
+import { IconTile, initials, Logo, Muted } from "@web/components/ui";
 import { v, Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
 import { ApiClientError } from "@web/lib/api-client";
+import type { InvitationPreview } from "@shared/contracts/access";
 import { authApi, authErrorMessage, RESET_EMAIL_KEY, RESET_TOKEN_KEY } from "./api";
 
 const lg = { height: 44, fontSize: 14 } as const;
@@ -152,57 +154,7 @@ function ProductPanel({ copy = LOGIN_PANEL }: { copy?: PanelCopy }) {
         </Typography>
         <Typography sx={{ color: "#B4B8C0", fontSize: 15 }}>{copy.body}</Typography>
       </Stack>
-      {copy.recoveryStep !== undefined ? (
-        <RecoverySteps active={copy.recoveryStep} />
-      ) : (
-        <Stack gap={1.25} sx={{ maxWidth: 460 }}>
-          <Stack gap={1.75} sx={{ bgcolor: "#1C1F24", border: "1px solid #2A2E35", borderRadius: "14px", p: 2.25 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Box sx={{ fontWeight: 500 }}>Shah Kitchen Remodel</Box>
-              <Box sx={{ fontSize: 12, px: 1, py: "2px", borderRadius: "6px", bgcolor: "#163322", color: "#86EFAC" }}>
-                Active
-              </Box>
-            </Stack>
-            <Box sx={{ height: 6, borderRadius: 3, bgcolor: "#2A2E35" }}>
-              <Box sx={{ width: "58%", height: "100%", borderRadius: 3, bgcolor: "#DD7A51" }} />
-            </Box>
-            <Box
-              sx={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 1.5, fontSize: 12, color: "#9A9FA8" }}
-            >
-              <Stack>
-                Contract<Num sx={{ color: "#fff", fontSize: 15 }}>$89,650</Num>
-              </Stack>
-              <Stack>
-                Paid<Num sx={{ color: "#fff", fontSize: 15 }}>$40,920</Num>
-              </Stack>
-              <Stack>
-                Next<Box sx={{ color: "#fff", fontSize: 14 }}>Cabinets · Nov 4</Box>
-              </Stack>
-            </Box>
-          </Stack>
-          <Stack
-            direction="row"
-            alignItems="center"
-            gap={1.5}
-            sx={{ bgcolor: "#1C1F24", border: "1px solid #2A2E35", borderRadius: "14px", px: 2.25, py: 1.75, ml: 5 }}
-          >
-            <Box
-              sx={{
-                width: 28,
-                height: 28,
-                borderRadius: "50%",
-                bgcolor: "#16A34A",
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              <CheckOutlined sx={{ fontSize: 15 }} />
-            </Box>
-            <Box sx={{ flex: 1, fontSize: 13 }}>Payment received · INV-3108</Box>
-            <Num sx={{ fontSize: 13 }}>$15,000.00</Num>
-          </Stack>
-        </Stack>
-      )}
+      {copy.recoveryStep !== undefined && <RecoverySteps active={copy.recoveryStep} />}
     </Box>
   );
 }
@@ -303,7 +255,7 @@ export function LoginView() {
                   Forgot password?
                 </Link>
               </Stack>
-              <FormikTextField name="password" type="password" autoComplete="current-password" sx={inputLg} />
+              <FormikPasswordField name="password" autoComplete="current-password" sx={inputLg} />
             </Stack>
             <FormikCheckbox name="remember" label="Keep me signed in for 30 days" />
             <Button type="submit" variant="contained" color="primary" sx={lg} disabled={isSubmitting}>
@@ -356,7 +308,12 @@ export function SignupView() {
         onSubmit={async (vals, { setStatus, setErrors }) => {
           setStatus(null);
           try {
-            await authApi.signup({ ...vals, name: vals.name.trim(), company: vals.company.trim(), email: vals.email.trim().toLowerCase() });
+            await authApi.signup({
+              ...vals,
+              name: vals.name.trim(),
+              company: vals.company.trim(),
+              email: vals.email.trim().toLowerCase(),
+            });
             router.replace("/onboarding");
             router.refresh();
           } catch (err) {
@@ -378,7 +335,13 @@ export function SignupView() {
             <FormikTextField name="name" label="Your name" autoComplete="name" sx={inputLg} />
             <FormikTextField name="company" label="Company name" autoComplete="organization" sx={inputLg} />
             <FormikTextField name="email" label="Work email" type="email" autoComplete="email" sx={inputLg} />
-            <FormikTextField name="password" label="Password" type="password" autoComplete="new-password" hint="At least 10 characters." sx={inputLg} />
+            <FormikPasswordField
+              name="password"
+              label="Password"
+              autoComplete="new-password"
+              hint="At least 10 characters."
+              sx={inputLg}
+            />
             <Button type="submit" variant="contained" color="primary" sx={lg} disabled={isSubmitting}>
               Create account
             </Button>
@@ -600,19 +563,17 @@ export function ResetPasswordView() {
                 {status} <Link href="/forgot-password">Start over</Link>
               </Alert>
             )}
-            <FormikTextField
+            <FormikPasswordField
               name="password"
               label="New password"
-              type="password"
               autoComplete="new-password"
               sx={inputLg}
               inputProps={{ "aria-describedby": "pwr" }}
             />
             <PasswordRules />
-            <FormikTextField
+            <FormikPasswordField
               name="confirm"
               label="Confirm password"
-              type="password"
               autoComplete="new-password"
               sx={inputLg}
             />
@@ -648,20 +609,45 @@ export function VerifyEmailView() {
 
 // ------------------------------------------------------ Accept invitation
 
+const fmtInviteDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
 export function AcceptInviteView({ token }: { token: string }) {
   const router = useRouter();
-  if (token === "expired")
+  const [invite, setInvite] = useState<InvitationPreview | null>(null);
+  const [invalid, setInvalid] = useState(false);
+
+  useEffect(() => {
+    authApi
+      .invitation(token)
+      .then(setInvite)
+      .catch(() => setInvalid(true));
+  }, [token]);
+
+  if (invalid)
     return (
-      <AuthCard icon={<ScheduleOutlined />} iconTone="neutral" title="This invitation has expired">
-        <Muted>Ask the person who invited you to send a new one. Invitations are valid for 7 days.</Muted>
+      <AuthCard icon={<ScheduleOutlined />} iconTone="neutral" title="This invitation is no longer valid">
+        <Muted>
+          The link has expired, was replaced by a newer invitation, or was already used. Ask the person who invited you
+          to send a new one. Invitations are valid for 7 days.
+        </Muted>
         <Button component={Link} href="/login" sx={lg}>
           Back to sign in
         </Button>
       </AuthCard>
     );
 
+  if (!invite)
+    return (
+      <AuthCard title="Loading invitation…">
+        <Box sx={{ display: "grid", placeItems: "center", py: 3 }}>
+          <CircularProgress size={28} />
+        </Box>
+      </AuthCard>
+    );
+
+  const existing = invite.account_exists;
   return (
-    <AuthCard title="Join as Estimator">
+    <AuthCard title={invite.role_name ? `Join as ${invite.role_name}` : "Join your team"}>
       <Stack direction="row" gap={1.5} alignItems="center">
         <Box
           sx={{
@@ -673,41 +659,62 @@ export function AcceptInviteView({ token }: { token: string }) {
             display: "grid",
             placeItems: "center",
             fontWeight: 600,
+            flex: "none",
           }}
         >
-          HP
+          {initials(invite.organization_name)}
         </Box>
         <Stack>
-          <Muted sx={{ fontSize: 13 }}>Dana Ruiz invited you to</Muted>
-          <Box sx={{ fontWeight: 600 }}>Harbor &amp; Pine Remodeling</Box>
+          <Muted sx={{ fontSize: 13 }}>{invite.invited_by ? `${invite.invited_by} invited you to` : "You're invited to"}</Muted>
+          <Box sx={{ fontWeight: 600 }}>{invite.organization_name}</Box>
         </Stack>
       </Stack>
       <Formik
-        initialValues={{ email: "alex.moreno@harborpine.com", name: "", password: "" }}
-        validationSchema={Yup.object({
-          name: v.required("Full name").min(2, "Enter your full name."),
-          password: newPassword,
-        })}
-        onSubmit={() => router.push("/dashboard")}
+        initialValues={{ email: invite.email, name: "", password: "" }}
+        validationSchema={Yup.object(
+          existing
+            ? { password: Yup.string().required("Enter your password.") }
+            : { name: v.required("Full name").min(2, "Enter your full name."), password: newPassword },
+        )}
+        onSubmit={async (vals, { setStatus, setErrors }) => {
+          setStatus(null);
+          try {
+            const { redirect } = await authApi.acceptInvitation({
+              token,
+              password: vals.password,
+              ...(!existing && { name: vals.name.trim() }),
+            });
+            router.replace(redirect);
+            router.refresh();
+          } catch (err) {
+            const fields = err instanceof ApiClientError ? err.body.field_errors : undefined;
+            if (fields) setErrors(Object.fromEntries(Object.entries(fields).map(([k, m]) => [k, m[0]!])));
+            else setStatus(authErrorMessage(err));
+          }
+        }}
       >
-        <Form noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <FormikTextField name="email" label="Email" disabled sx={inputLg} />
-          <FormikTextField name="name" label="Full name" autoComplete="name" sx={inputLg} autoFocus />
-          <FormikTextField
-            name="password"
-            label="Create a password"
-            type="password"
-            autoComplete="new-password"
-            sx={inputLg}
-          />
-          <PasswordRules />
-          <Button type="submit" variant="contained" color="primary" sx={lg}>
-            Accept &amp; join
-          </Button>
-          <Muted sx={{ fontSize: 12, textAlign: "center" }}>
-            Invitation expires Nov 5. Already have an account? <Link href="/login">Sign in to accept</Link>
-          </Muted>
-        </Form>
+        {({ isSubmitting, status }) => (
+          <Form noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {status && <Alert severity="error">{status}</Alert>}
+            <FormikTextField name="email" label="Email" disabled sx={inputLg} />
+            {existing ? (
+              <>
+                <Muted sx={{ fontSize: 13 }}>You already have a ContractorOS account. Enter its password to join.</Muted>
+                <FormikPasswordField name="password" label="Password" autoComplete="current-password" sx={inputLg} autoFocus />
+              </>
+            ) : (
+              <>
+                <FormikTextField name="name" label="Full name" autoComplete="name" sx={inputLg} autoFocus />
+                <FormikPasswordField name="password" label="Create a password" autoComplete="new-password" sx={inputLg} />
+                <PasswordRules />
+              </>
+            )}
+            <Button type="submit" variant="contained" color="primary" sx={lg} disabled={isSubmitting}>
+              Accept &amp; join
+            </Button>
+            <Muted sx={{ fontSize: 12, textAlign: "center" }}>Invitation expires {fmtInviteDate(invite.expires_at)}.</Muted>
+          </Form>
+        )}
       </Formik>
     </AuthCard>
   );

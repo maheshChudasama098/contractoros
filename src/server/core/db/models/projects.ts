@@ -146,3 +146,47 @@ export const ScheduleAssignment = sequelize.define(
     },
   },
 );
+
+// Job costs logged against a project. Category / payment method are master_items codes.
+export const ProjectExpense = sequelize.define(
+  "ProjectExpense",
+  {
+    id: uuidPk(),
+    organizationId: orgId(),
+    projectId: fk(),
+    expenseDate: dateOnly(false),
+    description: str(255, false),
+    category: str(64), // master_items code (type expense_category)
+    vendor: str(160),
+    amount: money(),
+    paymentMethod: str(64), // master_items code (type payment_method)
+    receiptFileId: fk(true),
+    createdByUserId: fk(),
+  },
+  { tableName: "project_expenses", indexes: [{ fields: ["project_id", "expense_date"] }] },
+);
+
+// Calendar entries on a project's schedule (site visits, inspections, work days…).
+export const ProjectEvent = sequelize.define(
+  "ProjectEvent",
+  {
+    id: uuidPk(),
+    organizationId: orgId(),
+    projectId: fk(),
+    title: str(180, false),
+    startAt: ts(false),
+    endAt: ts(false),
+    allDay: bool(true),
+    notes: text(),
+    createdByUserId: fk(),
+  },
+  {
+    tableName: "project_events",
+    indexes: [{ fields: ["project_id", "start_at"] }, { fields: ["organization_id", "start_at"] }],
+    validate: {
+      endAfterStart(this: { startAt: Date; endAt: Date }) {
+        if (this.endAt < this.startAt) throw new Error("end_at must not be before start_at");
+      },
+    },
+  },
+);

@@ -34,6 +34,8 @@ function toAuthUser(user: Model, activeOrganizationId: string | null): AuthUser 
     id: user.get("id") as string,
     email: user.get("email") as string,
     name: user.get("name") as string,
+    phone: (user.get("phone") as string | null) ?? null,
+    isSuperAdmin: !!user.get("isSuperAdmin"),
     emailVerified: !!user.get("emailVerifiedAt"),
     activeOrganizationId,
     passwordChangedAt: changed ? changed.toISOString() : null,
@@ -112,6 +114,13 @@ export const authService = {
     if (!session) throw Errors.unauthenticated();
     const user = await User.findByPk(session.userId);
     if (!user || user.get("status") === "disabled") throw Errors.unauthenticated();
+    return toAuthUser(user, session.activeOrganizationId);
+  },
+
+  async updateProfile(session: Session, input: { name: string; phone: string | null }): Promise<AuthUser> {
+    const user = await User.findByPk(session.userId);
+    if (!user) throw Errors.unauthenticated();
+    await user.update(input);
     return toAuthUser(user, session.activeOrganizationId);
   },
 

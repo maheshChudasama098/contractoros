@@ -1,4 +1,4 @@
-// Non-production: create (or reset) a login-ready owner user with its own organization.
+// Non-production: create (or reset) a login-ready super admin who owns its own (already onboarded) organization.
 // Usage: tsx --env-file=.env scripts/create-admin.ts <email> <password> [name]
 import { randomBytes, scrypt } from "node:crypto";
 import { promisify } from "node:util";
@@ -25,15 +25,17 @@ async function main() {
 
     const [user] = await User.findOrCreate({ where: { email: email.toLowerCase() }, defaults: { name }, transaction });
     await user.update(
-      { name, passwordHash, passwordChangedAt: new Date(), status: "active", emailVerifiedAt: new Date() },
+      { name, passwordHash, passwordChangedAt: new Date(), status: "active", emailVerifiedAt: new Date(), isSuperAdmin: true },
       { transaction },
     );
 
     const [org] = await Organization.findOrCreate({
       where: { slug: "admin-org" },
-      defaults: { name: "Admin Organization", status: "active", timezone: "UTC" },
+      defaults: { name: "Admin Organization", status: "active", timezone: "UTC", onboardingCompletedAt: new Date() },
       transaction,
     });
+    // Orgs created before onboarding existed must not send the admin through setup.
+    if (!org.get("onboardingCompletedAt")) await org.update({ onboardingCompletedAt: new Date() }, { transaction });
     const [membership] = await OrganizationMembership.findOrCreate({
       where: { organizationId: org.get("id"), userId: user.get("id") },
       defaults: { status: "active", joinedAt: new Date() },
@@ -45,7 +47,7 @@ async function main() {
       transaction,
     });
   });
-  console.log(`User ${email} ready (owner of "Admin Organization")`);
+  console.log(`User ${email} ready (super admin, owner of "Admin Organization")`);
 }
 
 main()

@@ -77,7 +77,14 @@ export const ExternalIdMapping = sequelize.define(
   {
     tableName: "external_id_mappings",
     timestamps: false,
-    indexes: [{ unique: true, fields: ["organization_id", "provider", "entity_type", "internal_entity_id"] }],
+    // Explicit name = what Postgres stored after truncating the default to 63 chars, so sync stops re-creating it.
+    indexes: [
+      {
+        name: "external_id_mappings_organization_id_provider_entity_type_inter",
+        unique: true,
+        fields: ["organization_id", "provider", "entity_type", "internal_entity_id"],
+      },
+    ],
   },
 );
 

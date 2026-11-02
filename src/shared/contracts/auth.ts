@@ -36,10 +36,23 @@ export const ChangePasswordInput = z
   });
 export type ChangePasswordInput = z.infer<typeof ChangePasswordInput>;
 
+export const UpdateProfileInput = z.object({
+  name: z.string().trim().min(1, "Your name is required.").max(160),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^[+()\d\s.-]{7,20}$/, "Enter a valid phone number.")
+    .or(z.literal(""))
+    .transform((v) => v || null),
+});
+export type UpdateProfileInput = z.input<typeof UpdateProfileInput>;
+
 export type AuthUser = {
   id: string;
   email: string;
   name: string;
+  phone: string | null;
+  isSuperAdmin: boolean;
   emailVerified: boolean;
   activeOrganizationId: string | null;
   passwordChangedAt: string | null;

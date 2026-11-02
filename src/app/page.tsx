@@ -1,5 +1,5 @@
-import { LandingView } from "@web/features/marketing/LandingView";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <LandingView />;
+  redirect("/login");
 }

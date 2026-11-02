@@ -3,14 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "worker": "tsx --tsconfig tsconfig.json workers/index.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -18,7 +16,9 @@
     "db:seed": "tsx --env-file=.env scripts/db-seed.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "db:sync": "tsx --env-file=.env scripts/db-sync.ts"
+    "db:sync": "tsx --env-file=.env scripts/db-sync.ts",
+    "db:seed:masters": "tsx --env-file=.env scripts/seed-masters.ts",
+    "db:seed:users": "tsx --env-file=.env scripts/seed-users.ts"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
@@ -55,8 +55,7 @@
     "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5",
-    "vitest": "^3.2.7"
+    "typescript": "^5"
   },
   "engines": {
     "node": ">=20"

@@ -123,6 +123,30 @@ export const theme = createTheme({
         notchedOutline: { "& legend": { display: "none" }, top: 0 },
       },
     },
+    MuiAutocomplete: {
+      styleOverrides: {
+        // Autocomplete adds its own root padding on top of the 40px input; drop it so it matches text fields.
+        inputRoot: {
+          "&&": { padding: 0, paddingRight: 64 },
+          "& .MuiAutocomplete-input": { "&&": { padding: "0 12px", height: 40 } },
+        },
+        endAdornment: { right: 8 },
+        paper: { marginTop: 6, border: `1px solid ${tokens.border}`, borderRadius: 10, boxShadow: "0 8px 24px rgba(16,24,40,.12)" },
+        listbox: {
+          padding: 6,
+          maxHeight: 320,
+          "& .MuiAutocomplete-option": {
+            borderRadius: 6,
+            padding: "8px 10px",
+            minHeight: 0,
+            "&.Mui-focused": { backgroundColor: tokens.hover },
+            '&[aria-selected="true"], &[aria-selected="true"].Mui-focused': { backgroundColor: tokens.brandSoft },
+          },
+        },
+        noOptions: { padding: "12px 14px", fontSize: 13.5, color: tokens.ink2 },
+        loading: { padding: "12px 14px", fontSize: 13.5 },
+      },
+    },
     MuiSelect: {
       styleOverrides: {
         // "&&" beats Select's own `height: auto; min-height: 1.4375em` so selects match text inputs (40px).

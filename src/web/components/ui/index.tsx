@@ -429,7 +429,12 @@ export function TabBar<T extends string>({
   label: string;
 }) {
   return (
-    <Box component="nav" aria-label={label} sx={{ display: "flex", gap: 2.5, borderBottom: `1px solid ${tokens.border}`, overflowX: "auto" }}>
+    <Box
+      component="nav"
+      aria-label={label}
+      // Inset shadow draws the baseline inside the box, so the active underline never overflows and adds a scrollbar.
+      sx={{ display: "flex", gap: 2.5, boxShadow: `inset 0 -1px 0 ${tokens.border}`, overflowX: "auto", overflowY: "hidden", scrollbarWidth: "none", "&::-webkit-scrollbar": { display: "none" } }}
+    >
       {items.map((i) => {
         const on = i.value === value;
         return (
@@ -447,7 +452,6 @@ export function TabBar<T extends string>({
               px: 0.25,
               border: 0,
               borderBottom: `2px solid ${on ? tokens.brand : "transparent"}`,
-              mb: "-1px",
               bgcolor: "transparent",
               font: "inherit",
               fontSize: 13.5,

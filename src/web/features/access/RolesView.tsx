@@ -50,7 +50,7 @@ export function RolesView() {
   return (
     <>
       <PageHeader
-        eyebrow="Auth management"
+        eyebrow="Auth"
         title="Roles"
         subtitle="Roles bundle permissions. Every request is checked on the server against the user's roles."
         actions={

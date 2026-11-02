@@ -23,9 +23,41 @@ export const Organization = sequelize.define(
     state: str(80),
     postalCode: str(20),
     country: { type: DataTypes.CHAR(2), allowNull: true },
+    industryId: fk(true),
+    companySize: str(24), // master_items code (type company_size)
+    logoFileId: fk(true),
+    googleReviewUrl: str(500),
+    onboardingCompletedAt: ts(),
     settings: json(),
   },
   { tableName: "organizations" },
+);
+
+// Platform-wide lookups managed by super admins. Industry has its own table (organizations.industry_id FKs it);
+// simpler lists live in master_items keyed by type, and rows reference them by `code`.
+export const MasterItem = sequelize.define(
+  "MasterItem",
+  {
+    id: uuidPk(),
+    type: str(40, false),
+    code: str(64, false),
+    name: str(120, false),
+    sortOrder: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    isActive: bool(true),
+  },
+  { tableName: "master_items", indexes: [{ unique: true, fields: ["type", "code"] }, { fields: ["type", "is_active"] }] },
+);
+
+// Platform-wide lookup managed by super admins (onboarding "Industry" menu).
+export const Industry = sequelize.define(
+  "Industry",
+  {
+    id: uuidPk(),
+    name: { ...str(100, false), unique: true },
+    sortOrder: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    isActive: bool(true),
+  },
+  { tableName: "industries" },
 );
 
 export const User = sequelize.define(
@@ -41,6 +73,7 @@ export const User = sequelize.define(
     passwordHash: str(255),
     passwordChangedAt: ts(),
     lastLoginAt: ts(),
+    isSuperAdmin: bool(false),
   },
   { tableName: "users" },
 );

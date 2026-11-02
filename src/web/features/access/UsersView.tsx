@@ -1,6 +1,7 @@
 "use client";
 
 import MoreHorizOutlined from "@mui/icons-material/MoreHorizOutlined";
+import ContentCopyOutlined from "@mui/icons-material/ContentCopyOutlined";
 import PersonAddAltOutlined from "@mui/icons-material/PersonAddAltOutlined";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
@@ -23,7 +24,7 @@ import TableRow from "@mui/material/TableRow";
 import { Form, Formik, useFormikContext } from "formik";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
-import { FormikSelect, FormikTextField } from "@web/components/form";
+import { FormikPasswordField, FormikSelect, FormikTextField } from "@web/components/form";
 import {
   EmptyState,
   InitialsAvatar,
@@ -36,7 +37,7 @@ import {
 } from "@web/components/ui";
 import { v, Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
-import type { MemberDto, RoleDto } from "@shared/contracts/access";
+import type { InvitationWithLink, MemberDto, RoleDto } from "@shared/contracts/access";
 import { accessApi, applyApiError } from "./api";
 
 const STATUS_TONE = { active: "success", suspended: "danger", invited: "warning" } as const;
@@ -73,6 +74,7 @@ export function UsersView() {
   const [editing, setEditing] = useState<MemberDto | "new" | null>(null);
   const [removing, setRemoving] = useState<MemberDto | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [link, setLink] = useState<InvitationWithLink | null>(null);
 
   const load = useCallback(() => {
     Promise.all([accessApi.users(), accessApi.roles()])
@@ -86,20 +88,28 @@ export function UsersView() {
     [users, q],
   );
   const active = users?.filter((u) => u.status === "active").length ?? 0;
+  const invited = users?.filter((u) => u.status === "invited").length ?? 0;
+
+  const sendInvite = async (m: MemberDto) => {
+    try {
+      setLink(await accessApi.inviteUser(m.id));
+      load();
+    } catch (e) {
+      setToast(applyApiError(e, () => {}) ?? "Could not create invite link");
+    }
+  };
 
   return (
     <>
       <PageHeader
-        eyebrow="Auth management"
         title="Users"
-        subtitle={users ? `${active} active · ${users.length} total` : "Loading…"}
+        subtitle={
+          users
+            ? `${active} active · ${users.length} total${invited ? ` · ${invited} invited` : ""}`
+            : "Loading…"
+        }
         actions={
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<PersonAddAltOutlined />}
-            onClick={() => setEditing("new")}
-          >
+          <Button variant="contained" color="primary" startIcon={<PersonAddAltOutlined />} onClick={() => setEditing("new")}>
             Add user
           </Button>
         }
@@ -151,7 +161,15 @@ export function UsersView() {
                     <TableCell>
                       <StatusTag tone={STATUS_TONE[m.status]}>{STATUS_LABEL[m.status]}</StatusTag>
                     </TableCell>
-                    <TableCell sx={{ color: "text.secondary" }}>{fmtDate(m.last_login_at)}</TableCell>
+                    <TableCell sx={{ color: "text.secondary" }}>
+                      {m.status !== "invited"
+                        ? fmtDate(m.last_login_at)
+                        : !m.invite_expires_at
+                          ? "Invite not sent"
+                          : new Date(m.invite_expires_at) < new Date()
+                            ? "Invite expired"
+                            : `Invite sent · expires ${fmtDate(m.invite_expires_at)}`}
+                    </TableCell>
                     <TableCell align="right">
                       <IconButton
                         size="small"
@@ -169,8 +187,15 @@ export function UsersView() {
         )}
       </SectionCard>
 
+      {link && <InviteLinkDialog invite={link} onClose={() => setLink(null)} />}
+
       <Menu anchorEl={menu?.el} open={!!menu} onClose={() => setMenu(null)}>
         <MenuItem onClick={() => (setEditing(menu!.m), setMenu(null))}>Edit user</MenuItem>
+        {menu && menu.m.status === "invited" && (
+          <MenuItem onClick={() => (setMenu(null), sendInvite(menu.m))}>
+            {menu.m.invite_expires_at ? "Resend invite link" : "Send invite link"}
+          </MenuItem>
+        )}
         {menu && !menu.m.is_self && menu.m.status !== "invited" && (
           <MenuItem
             onClick={async () => {
@@ -233,7 +258,7 @@ type UserForm = {
   email: string;
   password: string;
   job_title: string;
-  status: "active" | "suspended";
+  status: "active" | "suspended" | "invited";
   role_id: string;
 };
 
@@ -282,7 +307,7 @@ function UserDialog({
     name: v.required("Full name").min(2, "Enter the full name."),
     ...(isNew && {
       email: v.email(),
-      password: Yup.string().min(10, "Use at least 10 characters.").required("Set a password."),
+      password: Yup.string().min(10, "Use at least 10 characters."),
     }),
     role_id: Yup.string().required("Choose a role."),
   });
@@ -295,7 +320,7 @@ function UserDialog({
           email: member?.email ?? "",
           password: "",
           job_title: member?.job_title ?? "",
-          status: member?.status === "suspended" ? "suspended" : "active",
+          status: member?.status ?? "active",
           role_id: member?.role?.id ?? "",
         }}
         validationSchema={schema}
@@ -306,16 +331,21 @@ function UserDialog({
               await accessApi.createUser({
                 name: vals.name.trim(),
                 email: vals.email.trim(),
-                password: vals.password,
+                password: vals.password || undefined,
                 job_title: vals.job_title.trim() || undefined,
                 role_id: vals.role_id,
               });
-              onSaved(`${vals.name} added`);
+              onSaved(
+                vals.password
+                  ? `${vals.name} added`
+                  : `${vals.name} added as Invited. Use ⋯ → Send invite link to invite them.`,
+              );
             } else {
               await accessApi.updateUser(member.id, {
                 name: vals.name.trim(),
                 job_title: vals.job_title.trim() || null,
-                ...(!member.is_self && { status: vals.status, role_id: vals.role_id }),
+                ...(!member.is_self && { role_id: vals.role_id }),
+                ...(!member.is_self && vals.status !== "invited" && member.status !== "invited" && { status: vals.status }),
               });
               onSaved(`${vals.name} updated`);
             }
@@ -341,21 +371,23 @@ function UserDialog({
                   <FormikTextField name="name" label="Full name" autoFocus />
                   <FormikTextField name="email" label="Email" type="email" disabled={!isNew} />
                   {isNew ? (
-                    <FormikTextField
+                    <FormikPasswordField
                       name="password"
                       label="Temporary password"
-                      type="password"
                       autoComplete="new-password"
-                      hint="Share it securely."
+                      placeholder="Optional"
+                      hint="Leave blank to invite them instead — they'll set their own password."
                     />
                   ) : (
                     <FormikSelect
                       name="status"
                       label="Status"
-                      disabled={member.is_self}
+                      disabled={member.is_self || member.status === "invited"}
+                      hint={member.status === "invited" ? "Becomes Active when they accept the invite." : undefined}
                       options={[
                         { value: "active", label: "Active" },
                         { value: "suspended", label: "Suspended" },
+                        ...(member.status === "invited" ? [{ value: "invited", label: "Invited" }] : []),
                       ]}
                     />
                   )}
@@ -375,6 +407,48 @@ function UserDialog({
           </Form>
         )}
       </Formik>
+    </Dialog>
+  );
+}
+
+// ------------------------------------------------------- Invite link dialog
+
+/** Shows the invite link once (only its hash is stored), so it can be shared until email sending exists. */
+function InviteLinkDialog({ invite, onClose }: { invite: InvitationWithLink; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard.writeText(invite.invite_url);
+    setCopied(true);
+  };
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>Invitation ready</DialogTitle>
+      <DialogContent>
+        <Stack gap={2}>
+          <Muted sx={{ fontSize: 13.5 }}>
+            Send this link to <strong>{invite.email}</strong>
+            {invite.role ? ` to join as ${invite.role.name}` : ""}. It expires on {fmtDate(invite.expires_at)} and works once.
+          </Muted>
+          <Stack direction="row" gap={1} alignItems="center">
+            <Box
+              component="input"
+              readOnly
+              value={invite.invite_url}
+              onFocus={(e: React.FocusEvent<HTMLInputElement>) => e.currentTarget.select()}
+              aria-label="Invite link"
+              sx={{ flex: 1, minWidth: 0, height: 40, px: 1.5, border: `1px solid ${tokens.borderStrong}`, borderRadius: "8px", font: "inherit", fontSize: 13, bgcolor: tokens.surfaceMuted, color: tokens.ink2 }}
+            />
+            <Button startIcon={<ContentCopyOutlined />} onClick={copy}>
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </Stack>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="contained" color="primary" onClick={onClose}>
+          Done
+        </Button>
+      </DialogActions>
     </Dialog>
   );
 }

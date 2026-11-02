@@ -1,10 +1,14 @@
 "use client";
 
+import VisibilityOffOutlined from "@mui/icons-material/VisibilityOffOutlined";
+import VisibilityOutlined from "@mui/icons-material/VisibilityOutlined";
 import Checkbox from "@mui/material/Checkbox";
 import FormControl from "@mui/material/FormControl";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import FormHelperText from "@mui/material/FormHelperText";
 import FormLabel from "@mui/material/FormLabel";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
 import MenuItem from "@mui/material/MenuItem";
 import Radio from "@mui/material/Radio";
 import RadioGroup from "@mui/material/RadioGroup";
@@ -12,7 +16,7 @@ import Stack from "@mui/material/Stack";
 import Switch from "@mui/material/Switch";
 import TextField, { type TextFieldProps } from "@mui/material/TextField";
 import { useField } from "formik";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 /**
  * Label sits above the input (design pattern), so we render our own FormLabel
@@ -36,6 +40,35 @@ export function FormikTextField({ name, label, hint, helperText, ...props }: Fie
         {...props}
       />
     </Stack>
+  );
+}
+
+/** Password input with a show/hide toggle. */
+export function FormikPasswordField(props: Omit<FieldProps, "type">) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <FormikTextField
+      {...props}
+      type={visible ? "text" : "password"}
+      slotProps={{
+        input: {
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                aria-label={visible ? "Hide password" : "Show password"}
+                aria-pressed={visible}
+                onClick={() => setVisible((v) => !v)}
+                onMouseDown={(e) => e.preventDefault()}
+                edge="end"
+                size="small"
+              >
+                {visible ? <VisibilityOffOutlined fontSize="small" /> : <VisibilityOutlined fontSize="small" />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        },
+      }}
+    />
   );
 }
 

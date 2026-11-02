@@ -1,185 +1,247 @@
 "use client";
 
-import AddOutlined from "@mui/icons-material/AddOutlined";
 import CheckOutlined from "@mui/icons-material/CheckOutlined";
-import DeleteOutline from "@mui/icons-material/DeleteOutline";
+import UploadOutlined from "@mui/icons-material/UploadOutlined";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
-import IconButton from "@mui/material/IconButton";
+import CircularProgress from "@mui/material/CircularProgress";
+import FormHelperText from "@mui/material/FormHelperText";
+import FormLabel from "@mui/material/FormLabel";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { FieldArray, Form, Formik, type FormikProps } from "formik";
-import Link from "next/link";
+import { Form, Formik, type FormikHelpers } from "formik";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AnyObject, ObjectSchema } from "yup";
 import { FieldRow, FormikSelect, FormikTextField } from "@web/components/form";
 import { Logo, Muted } from "@web/components/ui";
-import { TIME_ZONES } from "@web/features/settings/SettingsView";
+import { ApiClientError } from "@web/lib/api-client";
 import { v, Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
+import type { MasterOption } from "@shared/contracts/masters";
+import { LOGO_MAX_BYTES, LOGO_MIME_TYPES, type OnboardingState } from "@shared/contracts/onboarding";
+import { authApi, authErrorMessage } from "./api";
+import { onboardingApi } from "./onboarding-api";
 
-const STATES = ["Texas", "Arizona", "Colorado", "Florida", "Georgia", "North Carolina", "Oklahoma", "Tennessee"];
+type Menus = { industry: MasterOption[]; company_size: MasterOption[]; time_zone: MasterOption[] };
+
 const STEPS = [
-  { title: "Company profile", sub: "Harbor & Pine Remodeling" },
-  { title: "Location & preferences", sub: "Time zone, numbering" },
-  { title: "Invite your team", sub: "Optional" },
-  { title: "Accept online payments", sub: "Stripe · can skip" },
-  { title: "Connect QuickBooks", sub: "Optional" },
+  { title: "Company profile", sub: "Name, industry, size", head: "Tell us about your company", body: "This appears on estimates, invoices and the customer portal." },
+  { title: "Location & preferences", sub: "Address, time zone", head: "Where does your team work?", body: "Used on estimates and invoices, and to set due dates and schedule times." },
+  { title: "Branding", sub: "Logo, Google reviews", head: "Make it yours", body: "Your logo shows on documents and the customer portal." },
 ];
 
 const initialValues = {
-  company: "Harbor & Pine Remodeling",
+  name: "",
   phone: "",
-  trade: "Remodeling",
-  address: "",
-  city: "Austin",
-  state: "Texas",
-  zip: "",
-  timeZone: TIME_ZONES[1]!,
-  currency: "USD — US dollar",
-  estPrefix: "EST-2001",
-  invPrefix: "INV-3001",
-  projPrefix: "P-1001",
-  invites: [{ email: "", role: "Estimator" }],
+  industryId: "",
+  companySize: "",
+  addressLine1: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  timezone: "America/Chicago",
+  googleReviewUrl: "",
 };
 type Values = typeof initialValues;
 
-const numbering = (label: string) =>
-  Yup.string()
-    .trim()
-    .matches(/^[A-Z]{1,5}-\d{1,6}$/, `${label}: use LETTERS-NUMBER, like EST-2001.`)
-    .required(`${label} start number is required.`);
-
 const SCHEMAS: ObjectSchema<AnyObject>[] = [
-  Yup.object({ company: v.required("Company name"), phone: v.phone().required("Business phone is required."), trade: Yup.string().required() }),
-  Yup.object({ address: v.required("Business address"), city: v.required("City"), state: v.required("State"), zip: v.zip().required("ZIP code is required."), timeZone: Yup.string().required(), estPrefix: numbering("Estimates"), invPrefix: numbering("Invoices"), projPrefix: numbering("Projects") }),
   Yup.object({
-    invites: Yup.array().of(Yup.object({ email: Yup.string().trim().email("Enter a valid email address."), role: Yup.string() })),
+    name: v.required("Company name"),
+    phone: v.phone().required("Business phone is required."),
+    industryId: Yup.string().required("Choose an industry."),
+    companySize: Yup.string().required("Choose a company size."),
   }),
-  Yup.object({}),
-  Yup.object({}),
+  Yup.object({
+    addressLine1: v.required("Business address"),
+    city: v.required("City"),
+    state: v.required("State"),
+    postalCode: v.required("ZIP code"),
+    timezone: Yup.string().required(),
+  }),
+  Yup.object({ googleReviewUrl: Yup.string().trim().url("Enter a full link, like https://g.page/r/…") }),
 ];
 
-function StepBody({ step, f }: { step: number; f: FormikProps<Values> }) {
+const fromState = (s: OnboardingState): Values => ({
+  ...initialValues,
+  ...Object.fromEntries(Object.entries({ ...s.company, ...s.location }).filter(([, val]) => val != null)),
+  googleReviewUrl: s.branding.googleReviewUrl ?? "",
+});
+
+function LogoUpload({ initialHasLogo }: { initialHasLogo: boolean }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(initialHasLogo ? "/api/v1/onboarding/logo" : null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => () => void (preview?.startsWith("blob:") && URL.revokeObjectURL(preview)), [preview]);
+
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    if (!(LOGO_MIME_TYPES as readonly string[]).includes(file.type)) return setError("Upload a PNG, JPG or WebP image.");
+    if (file.size > LOGO_MAX_BYTES) return setError("Logo must be 2 MB or smaller.");
+    setBusy(true);
+    try {
+      await onboardingApi.uploadLogo(file);
+      setPreview(URL.createObjectURL(file));
+    } catch (err) {
+      setError(err instanceof ApiClientError ? (err.body.field_errors?.logo?.[0] ?? err.body.message) : "Upload failed. Please try again.");
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = "";
+    }
+  };
+
+  return (
+    <Stack gap={0.75}>
+      <FormLabel htmlFor="logo">Company logo</FormLabel>
+      <Stack direction="row" alignItems="center" gap={2}>
+        <Box
+          sx={{ width: 88, height: 88, borderRadius: "12px", border: `1px dashed ${tokens.borderStrong}`, bgcolor: tokens.surfaceMuted, display: "grid", placeItems: "center", overflow: "hidden", flex: "none" }}
+        >
+          {busy ? (
+            <CircularProgress size={22} />
+          ) : preview ? (
+            // eslint-disable-next-line @next/next/no-img-element -- auth-protected API image, not a static asset
+            <img src={preview} alt="Company logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+          ) : (
+            <UploadOutlined sx={{ color: "text.secondary" }} />
+          )}
+        </Box>
+        <Stack gap={0.5}>
+          <Box>
+            <Button size="small" onClick={() => input.current?.click()} disabled={busy}>
+              {preview ? "Replace logo" : "Upload logo"}
+            </Button>
+          </Box>
+          <Muted sx={{ fontSize: 12 }}>PNG, JPG or WebP, up to 2 MB. Optional.</Muted>
+        </Stack>
+      </Stack>
+      <input ref={input} id="logo" type="file" accept={LOGO_MIME_TYPES.join(",")} hidden onChange={(e) => pick(e.target.files?.[0])} />
+      {error && <FormHelperText error>{error}</FormHelperText>}
+    </Stack>
+  );
+}
+
+function StepBody({ step, menus, state }: { step: number; menus: Menus; state: OnboardingState }) {
   switch (step) {
     case 0:
       return (
         <>
-          <FormikTextField name="company" label="Company name" />
+          <FormikTextField name="name" label="Company name" autoComplete="organization" />
+          <FormikTextField name="phone" label="Business phone" type="tel" autoComplete="tel" />
           <FieldRow>
-            <FormikTextField name="phone" label="Business phone" type="tel" />
-            <FormikSelect name="trade" label="Main type of work" options={["Remodeling", "Kitchen & bath", "Additions & ADUs", "Outdoor & decks", "General contracting"]} />
+            <FormikSelect
+              name="industryId"
+              label="Industry"
+              options={menus.industry}
+              hint={menus.industry.length ? undefined : "No industries yet. Ask your administrator to add them."}
+            />
+            <FormikSelect name="companySize" label="Company size" options={menus.company_size} />
           </FieldRow>
         </>
       );
     case 1:
       return (
         <>
-          <FormikTextField name="address" label="Business address" placeholder="2210 E Cesar Chavez St, Suite 4" />
+          <FormikTextField name="addressLine1" label="Business address" placeholder="2210 E Cesar Chavez St, Suite 4" autoComplete="street-address" />
           <FieldRow min={150}>
-            <FormikTextField name="city" label="City" />
-            <FormikSelect name="state" label="State" options={STATES} />
-            <FormikTextField name="zip" label="ZIP code" inputMode="numeric" />
+            <FormikTextField name="city" label="City" autoComplete="address-level2" />
+            <FormikTextField name="state" label="State" autoComplete="address-level1" />
+            <FormikTextField name="postalCode" label="ZIP code" autoComplete="postal-code" />
           </FieldRow>
           <FieldRow min={220}>
-            <FormikSelect name="timeZone" label="Time zone" options={TIME_ZONES} hint="Dates, reminders and schedules use this zone." />
-            <FormikSelect name="currency" label="Currency" options={["USD — US dollar"]} disabled hint="USD during the pilot." />
+            <FormikSelect name="timezone" label="Time zone" options={menus.time_zone} hint="Dates, reminders and schedules use this zone." />
+            <FormikSelect name="currency" label="Currency" options={["USD — US dollar"]} value="USD — US dollar" disabled hint="USD during the pilot." />
           </FieldRow>
-          <Box component="fieldset" sx={{ border: `1px solid ${tokens.divider}`, borderRadius: "12px", p: 2.25, m: 0, display: "flex", flexDirection: "column", gap: 1.75, bgcolor: tokens.surfaceMuted }}>
-            <Box component="legend" sx={{ fontSize: 13, fontWeight: 500, px: 0.75 }}>
-              Document numbering
-            </Box>
-            <FieldRow min={140}>
-              {(
-                [
-                  ["estPrefix", "Estimates"],
-                  ["invPrefix", "Invoices"],
-                  ["projPrefix", "Projects"],
-                ] as const
-              ).map(([n, l]) => (
-                <FormikTextField key={n} name={n} label={l} sx={{ "& input": { typography: "num" } }} onChange={(e) => f.setFieldValue(n, e.target.value.toUpperCase())} />
-              ))}
-            </FieldRow>
-            <Muted sx={{ fontSize: 12 }}>Numbers are issued in sequence and never reused, even after a void.</Muted>
-          </Box>
         </>
-      );
-    case 2:
-      return (
-        <FieldArray name="invites">
-          {(h) => (
-            <Stack gap={1.5}>
-              {f.values.invites.map((_, i) => (
-                <Box key={i} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0,1fr) 180px 40px" }, gap: 1, alignItems: "start" }}>
-                  <FormikTextField name={`invites.${i}.email`} placeholder="name@company.com" type="email" aria-label="Email" />
-                  <FormikSelect name={`invites.${i}.role`} options={["Sales", "Estimator", "Project Manager", "Field Worker", "Accountant"]} aria-label="Role" />
-                  <IconButton aria-label="Remove" onClick={() => h.remove(i)} disabled={f.values.invites.length === 1}>
-                    <DeleteOutline fontSize="small" />
-                  </IconButton>
-                </Box>
-              ))}
-              <Box>
-                <Button variant="text" size="small" startIcon={<AddOutlined />} onClick={() => h.push({ email: "", role: "Estimator" })}>
-                  Add another
-                </Button>
-              </Box>
-              <Muted sx={{ fontSize: 13 }}>Leave blank to skip — you can invite people later from Team &amp; roles.</Muted>
-            </Stack>
-          )}
-        </FieldArray>
-      );
-    case 3:
-      return (
-        <Stack gap={1.5}>
-          <Typography>Connect Stripe so homeowners can pay invoices by card or bank transfer from their portal. Payouts go straight to your bank.</Typography>
-          <Box>
-            <Button variant="contained" sx={{ bgcolor: "#635BFF", "&:hover": { bgcolor: "#4F46E5" }, border: 0 }}>
-              Connect with Stripe
-            </Button>
-          </Box>
-        </Stack>
       );
     default:
       return (
-        <Stack gap={1.5}>
-          <Typography>Send customers, invoices and payments to QuickBooks Online automatically. Sync runs in the background with retries.</Typography>
-          <Box>
-            <Button variant="contained" sx={{ bgcolor: "#2CA01C", "&:hover": { bgcolor: "#23801A" }, border: 0 }}>
-              Connect QuickBooks
-            </Button>
-          </Box>
-        </Stack>
+        <>
+          <LogoUpload initialHasLogo={state.branding.hasLogo} />
+          <FormikTextField
+            name="googleReviewUrl"
+            label="Google review link (optional)"
+            type="url"
+            placeholder="https://g.page/r/…/review"
+            hint="We'll invite happy customers to leave a review here."
+          />
+        </>
       );
   }
 }
 
-const HEAD = [
-  ["Tell us about your company", "This appears on estimates, invoices and the customer portal."],
-  ["Where does your team work?", "Used on estimates and invoices, and to set due dates and schedule times."],
-  ["Invite your team", "Give people the access their role needs. They'll get an email to join."],
-  ["Accept online payments", "Optional — you can connect Stripe any time from Integrations."],
-  ["Connect QuickBooks", "Optional — keep your books in sync without double entry."],
-];
-
 export function OnboardingView() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
+  const [state, setState] = useState<OnboardingState | null>(null);
+  const [menus, setMenus] = useState<Menus>({ industry: [], company_size: [], time_zone: [] });
+  const [loadError, setLoadError] = useState<string | null>(null);
   const last = step === STEPS.length - 1;
+
+  useEffect(() => {
+    Promise.all([
+      onboardingApi.state(),
+      onboardingApi.options("industry"),
+      onboardingApi.options("company_size"),
+      onboardingApi.options("time_zone"),
+    ])
+      .then(([s, industry, company_size, time_zone]) => {
+        setState(s);
+        setMenus({ industry, company_size, time_zone });
+      })
+      .catch((err) => setLoadError(authErrorMessage(err)));
+  }, []);
+
+  const signOut = async () => {
+    await authApi.logout();
+    router.replace("/login");
+    router.refresh();
+  };
+
+  const submit = async (vals: Values, { setErrors, setStatus, setTouched }: FormikHelpers<Values>) => {
+    setStatus(null);
+    try {
+      if (step === 0) {
+        await onboardingApi.saveCompany({ name: vals.name, phone: vals.phone, industryId: vals.industryId, companySize: vals.companySize });
+      } else if (step === 1) {
+        await onboardingApi.saveLocation({ addressLine1: vals.addressLine1, city: vals.city, state: vals.state, postalCode: vals.postalCode, timezone: vals.timezone });
+      } else {
+        await onboardingApi.complete({ googleReviewUrl: vals.googleReviewUrl });
+        router.replace("/dashboard");
+        router.refresh();
+        return;
+      }
+      setTouched({});
+      setStep((s) => s + 1);
+    } catch (err) {
+      const fields = err instanceof ApiClientError ? err.body.field_errors : undefined;
+      const fieldMap = fields && Object.fromEntries(Object.entries(fields).filter(([k]) => !k.startsWith("_")).map(([k, m]) => [k, m[0]!]));
+      if (fieldMap && Object.keys(fieldMap).length) setErrors(fieldMap);
+      else setStatus(fields?._step?.[0] ?? authErrorMessage(err));
+    }
+  };
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: tokens.bg, display: "flex", flexDirection: "column" }}>
       <Stack component="header" direction="row" justifyContent="space-between" alignItems="center" gap={2} sx={{ px: { xs: 2, md: 4 }, py: 1.75, bgcolor: "#fff", borderBottom: `1px solid ${tokens.border}` }}>
         <Logo />
         <Muted sx={{ fontSize: 13 }}>
-          dana@harborpine.com · <Link href="/login">Sign out</Link>
+          {state?.email}
+          {state?.email && " · "}
+          <Box component="button" type="button" onClick={signOut} sx={{ all: "unset", cursor: "pointer", color: tokens.brand, fontWeight: 500 }}>
+            Sign out
+          </Box>
         </Muted>
       </Stack>
       <Box component="main" sx={{ width: "100%", maxWidth: 1080, mx: "auto", px: 3, pt: 6, pb: 9, display: "flex", flexWrap: "wrap", gap: 5, alignItems: "flex-start" }}>
         <Stack gap={2.5} sx={{ flex: "1 1 260px" }}>
           <Stack gap={0.75}>
-            <Box sx={{ fontSize: 13, fontWeight: 500, color: tokens.brand }}>Get set up · about 4 minutes</Box>
+            <Box sx={{ fontSize: 13, fontWeight: 500, color: tokens.brand }}>Get set up · about 2 minutes</Box>
             <Typography variant="h2">Your workspace</Typography>
           </Stack>
           <Box component="nav" aria-label="Setup steps">
@@ -209,46 +271,39 @@ export function OnboardingView() {
           </Box>
         </Stack>
 
-        <Formik<Values>
-          initialValues={initialValues}
-          validationSchema={SCHEMAS[step]}
-          onSubmit={(_, { setTouched }) => {
-            setTouched({});
-            if (last) router.push("/dashboard");
-            else setStep((s) => s + 1);
-          }}
-        >
-          {(f) => (
-            <Card component={Form} noValidate sx={{ flex: "999 1 540px", minWidth: 0, borderRadius: "16px", display: "flex", flexDirection: "column" }}>
-              <Stack gap={0.75} sx={{ px: 4, pt: 4, pb: 1 }}>
-                <Muted sx={{ fontSize: 13 }}>
-                  Step {step + 1} of {STEPS.length}
-                </Muted>
-                <Typography variant="h1" sx={{ letterSpacing: "-0.03em" }}>
-                  {HEAD[step]![0]}
-                </Typography>
-                <Muted>{HEAD[step]![1]}</Muted>
-              </Stack>
-              <Stack gap={2.5} sx={{ px: 4, py: 3 }}>
-                <StepBody step={step} f={f} />
-              </Stack>
-              <Stack direction="row" flexWrap="wrap" justifyContent="space-between" gap={1.5} sx={{ px: 4, py: 2, borderTop: `1px solid ${tokens.divider}`, bgcolor: tokens.surfaceMuted, borderRadius: "0 0 16px 16px" }}>
-                <Button variant="text" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
-                  Back
-                </Button>
-                <Stack direction="row" gap={1}>
-                  <Button component={Link} href="/dashboard">
-                    Finish later
+        {!state ? (
+          <Card sx={{ flex: "999 1 540px", minWidth: 0, borderRadius: "16px", p: 4, display: "grid", placeItems: "center", minHeight: 320 }}>
+            {loadError ? <Alert severity="error">{loadError}</Alert> : <CircularProgress />}
+          </Card>
+        ) : (
+          <Formik<Values> initialValues={fromState(state)} validationSchema={SCHEMAS[step]} onSubmit={submit}>
+            {(f) => (
+              <Card component={Form} noValidate sx={{ flex: "999 1 540px", minWidth: 0, borderRadius: "16px", display: "flex", flexDirection: "column" }}>
+                <Stack gap={0.75} sx={{ px: 4, pt: 4, pb: 1 }}>
+                  <Muted sx={{ fontSize: 13 }}>
+                    Step {step + 1} of {STEPS.length}
+                  </Muted>
+                  <Typography variant="h1" sx={{ letterSpacing: "-0.03em" }}>
+                    {STEPS[step]!.head}
+                  </Typography>
+                  <Muted>{STEPS[step]!.body}</Muted>
+                </Stack>
+                <Stack gap={2.5} sx={{ px: 4, py: 3 }}>
+                  {f.status && <Alert severity="error">{f.status}</Alert>}
+                  <StepBody step={step} menus={menus} state={state} />
+                </Stack>
+                <Stack direction="row" flexWrap="wrap" justifyContent="space-between" gap={1.5} sx={{ px: 4, py: 2, borderTop: `1px solid ${tokens.divider}`, bgcolor: tokens.surfaceMuted, borderRadius: "0 0 16px 16px" }}>
+                  <Button variant="text" disabled={step === 0 || f.isSubmitting} onClick={() => setStep((s) => s - 1)}>
+                    Back
                   </Button>
-                  {step >= 2 && !last && <Button onClick={() => setStep((s) => s + 1)}>Skip</Button>}
                   <Button type="submit" variant="contained" color="primary" disabled={f.isSubmitting}>
                     {last ? "Go to dashboard" : "Continue"}
                   </Button>
                 </Stack>
-              </Stack>
-            </Card>
-          )}
-        </Formik>
+              </Card>
+            )}
+          </Formik>
+        )}
       </Box>
     </Box>
   );

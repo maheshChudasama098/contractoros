@@ -53,7 +53,7 @@ export const RefundStatus = ["requested", "pending", "succeeded", "failed"] as c
 export const WebhookProvider = ["stripe", "quickbooks", "esign"] as const;
 export const WebhookEventStatus = ["received", "processing", "processed", "failed", "ignored"] as const;
 
-export const StorageProvider = ["s3"] as const;
+export const StorageProvider = ["s3", "local"] as const;
 export const FileScanStatus = ["pending", "clean", "infected", "not_required"] as const;
 export const FileStatus = ["pending", "available", "quarantined", "deleted"] as const;
 export const DocumentEntityType = [

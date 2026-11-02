@@ -47,6 +47,8 @@ const orgOwned: M[] = [
   P.Project,
   P.ProjectMember,
   P.ProjectTask,
+  P.ProjectExpense,
+  P.ProjectEvent,
   P.Milestone,
   P.Crew,
   P.ScheduleAssignment,
@@ -75,6 +77,8 @@ I.Role.belongsTo(I.Organization, { foreignKey: "organizationId", as: "organizati
 // Identity & RBAC
 ref(I.OrganizationMembership, I.User, "userId", "user", { inverse: "memberships" });
 ref(I.User, X.StoredFile, "avatarFileId", "avatarFile", { constraints: false });
+ref(I.Organization, I.Industry, "industryId", "industry", { onDelete: "SET NULL" });
+ref(I.Organization, X.StoredFile, "logoFileId", "logoFile", { constraints: false });
 I.Role.belongsToMany(I.Permission, {
   through: I.RolePermission,
   foreignKey: "roleId",
@@ -156,6 +160,11 @@ ref(P.ProjectTask, P.Project, "projectId", "project", { inverse: "tasks" });
 ref(P.ProjectTask, P.ProjectTask, "parentTaskId", "parentTask", { onDelete: "CASCADE", inverse: "subtasks" });
 ref(P.ProjectTask, I.OrganizationMembership, "assigneeMembershipId", "assignee", { onDelete: "SET NULL" });
 ref(P.ProjectTask, I.User, "createdByUserId", "createdBy");
+ref(P.ProjectExpense, P.Project, "projectId", "project", { inverse: "expenses" });
+ref(P.ProjectExpense, X.StoredFile, "receiptFileId", "receiptFile", { constraints: false });
+ref(P.ProjectExpense, I.User, "createdByUserId", "createdBy");
+ref(P.ProjectEvent, P.Project, "projectId", "project", { onDelete: "CASCADE", inverse: "events" });
+ref(P.ProjectEvent, I.User, "createdByUserId", "createdBy");
 ref(P.Milestone, P.Project, "projectId", "project", { inverse: "milestones" });
 ref(P.CrewMember, P.Crew, "crewId", "crew", { onDelete: "CASCADE", inverse: "members" });
 ref(P.CrewMember, I.OrganizationMembership, "membershipId", "membership");

@@ -1,4 +1,5 @@
 import { ApiClientError, api } from "@web/lib/api-client";
+import type { AcceptInvitationInput, InvitationPreview } from "@shared/contracts/access";
 import type {
   AuthUser,
   ChangePasswordInput,
@@ -6,6 +7,7 @@ import type {
   LoginInput,
   ResetPasswordInput,
   SignupInput,
+  UpdateProfileInput,
   VerifyOtpInput,
   VerifyOtpResult,
 } from "@shared/contracts/auth";
@@ -18,9 +20,13 @@ export const authApi = {
   signup: (input: SignupInput) => post<AuthUser>("/auth/signup", input),
   logout: () => fetch("/api/v1/auth/logout", { method: "POST", credentials: "same-origin" }),
   me: () => api<AuthUser>("/auth/me"),
+  updateProfile: (input: UpdateProfileInput) =>
+    api<AuthUser>("/auth/me", { method: "PATCH", body: JSON.stringify(input) }),
   forgotPassword: (input: ForgotPasswordInput) => post<{ sent: true }>("/auth/forgot-password", input),
   verifyOtp: (input: VerifyOtpInput) => post<VerifyOtpResult>("/auth/verify-otp", input),
   resetPassword: (input: ResetPasswordInput) => post<{ reset: true }>("/auth/reset-password", input),
+  invitation: (token: string) => api<InvitationPreview>(`/invitations/accept?token=${encodeURIComponent(token)}`),
+  acceptInvitation: (input: AcceptInvitationInput) => post<{ redirect: string }>("/invitations/accept", input),
   changePassword: (input: ChangePasswordInput) => post<{ changed: true }>("/auth/change-password", input),
 };
 

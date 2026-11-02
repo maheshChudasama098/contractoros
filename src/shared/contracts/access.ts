@@ -82,6 +82,8 @@ export type MemberDto = {
   last_login_at: string | null;
   joined_at: string | null;
   is_self: boolean;
+  /** Invited users only: when the latest invite link expires (null = no link sent yet). */
+  invite_expires_at: string | null;
 };
 
 const roleId = z.string({ required_error: "Choose a role." }).uuid("Choose a role.");
@@ -89,7 +91,13 @@ const roleId = z.string({ required_error: "Choose a role." }).uuid("Choose a rol
 export const CreateMemberInput = z.object({
   name: z.string().trim().min(2, "Enter the full name.").max(160),
   email: z.string().trim().toLowerCase().email().max(254),
-  password: z.string().min(10, "Use at least 10 characters.").max(200),
+  // Blank = "invite": the user joins as Invited and sets their own password from the invite link.
+  password: z
+    .string()
+    .max(200)
+    .optional()
+    .transform((v) => v || undefined)
+    .refine((v) => v === undefined || v.length >= 10, "Use at least 10 characters."),
   job_title: z.string().trim().max(100).optional(),
   role_id: roleId,
 });
@@ -102,3 +110,37 @@ export const UpdateMemberInput = z.object({
   role_id: roleId.optional(),
 });
 export type UpdateMemberInput = z.infer<typeof UpdateMemberInput>;
+
+// ---------------------------------------------------------------- Invitations
+
+export const INVITE_TTL_DAYS = 7;
+
+export type InvitationDto = {
+  id: string;
+  email: string;
+  role: { id: string; name: string } | null;
+  invited_by: string | null;
+  expires_at: string;
+  expired: boolean;
+  created_at: string;
+};
+
+/** Returned once on create/resend: the raw link is never stored, only its hash. */
+export type InvitationWithLink = InvitationDto & { invite_url: string };
+
+/** Public preview shown on /invite/[token] before the person accepts. */
+export type InvitationPreview = {
+  email: string;
+  organization_name: string;
+  role_name: string | null;
+  invited_by: string | null;
+  expires_at: string;
+  account_exists: boolean; // existing users confirm with their password instead of creating one
+};
+
+export const AcceptInvitationInput = z.object({
+  token: z.string().min(20).max(200),
+  name: z.string().trim().max(160).optional(),
+  password: z.string().min(1, "Enter a password.").max(128),
+});
+export type AcceptInvitationInput = z.infer<typeof AcceptInvitationInput>;

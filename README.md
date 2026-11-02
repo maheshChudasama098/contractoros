@@ -13,7 +13,6 @@ Architecture: [docs/architecture.md](docs/architecture.md).
 | `src/shared/` | Zod contracts + types + helpers used by both web and server. |
 | `prisma/` | Database schema, migrations, seed. |
 | `workers/` | Background job process (BullMQ). |
-| `tests/` | `unit`, `integration`, `e2e`, `security`. |
 
 `leads` is a complete example slice: `shared/contracts/leads.ts` → `app/api/v1/leads/route.ts` → `server/modules/leads/` → `web/features/leads/`. Copy that pattern for new modules.
 

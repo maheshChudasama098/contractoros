@@ -1,6 +1,6 @@
 import "server-only";
 import { Op, type Model, type Transaction } from "sequelize";
-import { MembershipRole, OrganizationMembership, Role, User, sequelize } from "@server/core/db/models";
+import { Invitation, MembershipRole, OrganizationMembership, Role, User, sequelize } from "@server/core/db/models";
 import { authorize } from "@server/core/authorization/policy";
 import { recordAudit } from "@server/core/audit/audit.service";
 import { hashPassword } from "@server/core/auth/crypto";
@@ -15,7 +15,7 @@ const include = [
   { model: Role, as: "roles", through: { attributes: [] } },
 ];
 
-function toMemberDto(m: Model, ctx: TenantContext): MemberDto {
+function toMemberDto(m: Model, ctx: TenantContext, invites = new Map<string, Date>()): MemberDto {
   const user = m.get("user") as Model;
   const roles = (m.get("roles") as Model[]) ?? [];
   const iso = (d: unknown) => (d instanceof Date ? d.toISOString() : null);
@@ -30,6 +30,7 @@ function toMemberDto(m: Model, ctx: TenantContext): MemberDto {
     last_login_at: iso(user.get("lastLoginAt")),
     joined_at: iso(m.get("joinedAt")),
     is_self: user.get("id") === ctx.userId,
+    invite_expires_at: m.get("status") === "invited" ? iso(invites.get(user.get("email") as string)) : null,
   };
 }
 
@@ -55,6 +56,19 @@ async function assertOwnerRemains(ctx: TenantContext, excludingMembershipId: str
   if (others === 0) throw Errors.conflict("The company needs at least one active Owner.");
 }
 
+/** Latest live invite link per email, for showing "invite sent / expires" on invited users. */
+async function pendingInvites(ctx: TenantContext, emails: string[]) {
+  if (!emails.length) return new Map<string, Date>();
+  const rows = await Invitation.findAll({
+    where: { organizationId: ctx.organizationId, email: emails, acceptedAt: null, revokedAt: null },
+    attributes: ["email", "expiresAt"],
+  });
+  return new Map(rows.map((r) => [r.get("email") as string, r.get("expiresAt") as Date]));
+}
+
+const invitedEmails = (rows: Model[]) =>
+  rows.filter((m) => m.get("status") === "invited").map((m) => (m.get("user") as Model).get("email") as string);
+
 const isOwner = (m: Model) => ((m.get("roles") as Model[]) ?? []).some((r) => r.get("key") === "owner");
 
 export const memberService = {
@@ -65,28 +79,34 @@ export const memberService = {
       include,
       order: [[{ model: User, as: "user" }, "name", "ASC"]],
     });
-    return rows.map((m) => toMemberDto(m, ctx));
+    const invites = await pendingInvites(ctx, invitedEmails(rows));
+    return rows.map((m) => toMemberDto(m, ctx, invites));
   },
 
   async get(ctx: TenantContext, id: string): Promise<MemberDto> {
     authorize(ctx, "team.manage");
-    return toMemberDto(await findMember(ctx, id), ctx);
+    const m = await findMember(ctx, id);
+    return toMemberDto(m, ctx, await pendingInvites(ctx, invitedEmails([m])));
   },
 
-  /** Adds a user to the company. Reuses the account if the email already exists. */
+  /**
+   * Adds a user to the company. Reuses the account if the email already exists.
+   * With a password they're active right away; without one they're "invited" until they accept an invite link.
+   */
   async create(ctx: TenantContext, input: CreateMemberInput): Promise<MemberDto> {
     authorize(ctx, "team.manage");
     const id = await sequelize.transaction(async (transaction) => {
       const roleIds = await roleService.assertAssignable(ctx, [input.role_id], transaction);
+      const status = input.password ? "active" : "invited";
       let user = await User.findOne({ where: { email: input.email }, transaction });
       if (!user) {
         user = await User.create(
           {
             email: input.email,
             name: input.name,
-            status: "active",
-            passwordHash: await hashPassword(input.password),
-            passwordChangedAt: new Date(),
+            ...(input.password
+              ? { status: "active", passwordHash: await hashPassword(input.password), passwordChangedAt: new Date() }
+              : { status: "pending" }),
           },
           { transaction },
         );
@@ -101,7 +121,7 @@ export const memberService = {
         throw Errors.validation({ email: ["This person is already a user in your company."] });
       if (membership) {
         await membership.update(
-          { status: "active", jobTitle: input.job_title ?? null, joinedAt: new Date() },
+          { status, jobTitle: input.job_title ?? null, joinedAt: status === "active" ? new Date() : null },
           { transaction },
         );
         await MembershipRole.destroy({ where: { membershipId: membership.get("id") }, transaction });
@@ -110,9 +130,9 @@ export const memberService = {
           {
             organizationId: ctx.organizationId,
             userId,
-            status: "active",
+            status,
             jobTitle: input.job_title ?? null,
-            joinedAt: new Date(),
+            joinedAt: status === "active" ? new Date() : null,
           },
           { transaction },
         );
@@ -132,6 +152,8 @@ export const memberService = {
   async update(ctx: TenantContext, id: string, input: UpdateMemberInput): Promise<MemberDto> {
     authorize(ctx, "team.manage");
     const before = await this.get(ctx, id);
+    if (before.status === "invited" && input.status)
+      throw Errors.conflict("Invited users become active when they accept their invite.");
     if (before.is_self && (input.status || input.role_id))
       throw Errors.conflict("You can't change your own roles or status. Ask another admin.");
 
@@ -175,6 +197,11 @@ export const memberService = {
       if (isOwner(m)) await assertOwnerRemains(ctx, id, transaction);
       await MembershipRole.destroy({ where: { membershipId: id }, transaction });
       await m.update({ status: "removed" }, { transaction });
+      // Any invite link they still hold stops working.
+      await Invitation.update(
+        { revokedAt: new Date() },
+        { where: { organizationId: ctx.organizationId, email: before.email, acceptedAt: null, revokedAt: null }, transaction },
+      );
     });
     await recordAudit(ctx, { action: "member.removed", entityType: "membership", entityId: id, before });
   },

@@ -2,10 +2,8 @@
 
 import AddOutlined from "@mui/icons-material/AddOutlined";
 import MoreHorizOutlined from "@mui/icons-material/MoreHorizOutlined";
-import NotificationsNoneOutlined from "@mui/icons-material/NotificationsNoneOutlined";
 import SearchOutlined from "@mui/icons-material/SearchOutlined";
 import UnfoldMoreOutlined from "@mui/icons-material/UnfoldMoreOutlined";
-import Badge from "@mui/material/Badge";
 import Box from "@mui/material/Box";
 import Breadcrumbs from "@mui/material/Breadcrumbs";
 import Button from "@mui/material/Button";
@@ -21,6 +19,7 @@ import { tokens } from "@web/theme/tokens";
 import { useBreadcrumbLabelFor } from "./breadcrumb-label";
 import { BOTTOM_NAV, NAV, SECTION_LABELS, type NavItem } from "./nav";
 import { Kbd, SearchPalette } from "./SearchPalette";
+import { UserMenu, type ShellUser } from "./UserMenu";
 
 const isActive = (path: string, href: string) => path === href || path.startsWith(href + "/");
 
@@ -78,7 +77,7 @@ function NavLink({
   );
 }
 
-function Sidebar({ compact, onNavigate }: { compact?: boolean; onNavigate?: () => void }) {
+function Sidebar({ compact, onNavigate, superAdmin }: { compact?: boolean; onNavigate?: () => void; superAdmin: boolean }) {
   const path = usePathname();
   return (
     <Stack
@@ -143,7 +142,7 @@ function Sidebar({ compact, onNavigate }: { compact?: boolean; onNavigate?: () =
           <UnfoldMoreOutlined sx={{ fontSize: 16, color: "#9A9FA8" }} />
         </Box>
       )}
-      {NAV.map((g, gi) => (
+      {NAV.filter((g) => superAdmin || !g.superAdminOnly).map((g, gi) => (
         <Stack
           key={gi}
           gap={0.25}
@@ -226,7 +225,7 @@ function useBreadcrumbs() {
   return crumbs;
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ user, children }: { user: ShellUser; children: ReactNode }) {
   const path = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -258,10 +257,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         }}
       >
         <Box sx={{ display: { md: "none", lg: "block" }, height: "100%" }}>
-          <Sidebar />
+          <Sidebar superAdmin={user.isSuperAdmin} />
         </Box>
         <Box sx={{ display: { md: "block", lg: "none" }, height: "100%" }}>
-          <Sidebar compact />
+          <Sidebar compact superAdmin={user.isSuperAdmin} />
         </Box>
       </Box>
 
@@ -293,16 +292,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <IconButton aria-label="Search" onClick={() => setSearchOpen(true)} sx={{ width: 44, height: 44 }}>
             <SearchOutlined />
           </IconButton>
-          <IconButton
-            component={Link}
-            href="/notifications"
-            aria-label="Notifications, 3 unread"
-            sx={{ width: 44, height: 44 }}
-          >
-            <Badge variant="dot" color="primary">
-              <NotificationsNoneOutlined />
-            </Badge>
-          </IconButton>
+          <UserMenu user={user} compact />
         </Stack>
 
         {/* Desktop header */}
@@ -353,16 +343,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setSearchOpen(true)}>
               Create
             </Button>
-            <Button
-              component={Link}
-              href="/notifications"
-              aria-label="Notifications, 3 unread"
-              sx={{ width: 40, minWidth: 40, p: 0 }}
-            >
-              <Badge variant="dot" color="primary">
-                <NotificationsNoneOutlined sx={{ fontSize: 18 }} />
-              </Badge>
-            </Button>
+            <UserMenu user={user} />
           </Stack>
         </Stack>
 
@@ -459,7 +440,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         onClose={() => setMoreOpen(false)}
         PaperProps={{ sx: { width: 280, border: 0 } }}
       >
-        <Sidebar onNavigate={() => setMoreOpen(false)} />
+        <Sidebar onNavigate={() => setMoreOpen(false)} superAdmin={user.isSuperAdmin} />
       </Drawer>
 
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} />

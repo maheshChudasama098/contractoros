@@ -9,22 +9,21 @@ import Stack from "@mui/material/Stack";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { tokens } from "@web/theme/tokens";
-import { searchIndex } from "@web/mocks/data";
 
 const CHIPS = ["All", "Customers", "Projects", "Estimates", "Invoices", "Leads"] as const;
 type Chip = (typeof CHIPS)[number];
 
-const CREATE = [
-  { label: "New lead", href: "/leads?new=1", keys: "N L" },
-  { label: "New estimate", href: "/estimates/new", keys: "N E" },
-  { label: "New invoice", href: "/invoices/new", keys: "N I" },
-  { label: "New change order", href: "/change-orders?new=1", keys: "N C" },
-  { label: "Assign work on the schedule", href: "/schedule" },
-];
+type SearchHit = { title: string; sub: string; kind: "Customer" | "Project" | "Estimate" | "Invoice" | "Lead"; href: string; badge: string };
+
+// Modules were removed; repopulate as pages come back.
+const searchIndex: SearchHit[] = [];
+const CREATE: { label: string; href: string; keys?: string }[] = [];
 const GOTO = [
   { label: "Dashboard", href: "/dashboard", keys: "G D" },
+  { label: "Customers", href: "/customers", keys: "G C" },
   { label: "Projects", href: "/projects", keys: "G P" },
-  { label: "Invoices & payments", href: "/invoices", keys: "G I" },
+  { label: "Users", href: "/users", keys: "G U" },
+  { label: "Roles", href: "/roles", keys: "G R" },
 ];
 
 const Kbd = ({ children }: { children: React.ReactNode }) => (

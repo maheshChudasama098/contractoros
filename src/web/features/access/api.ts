@@ -1,6 +1,7 @@
 import { api, ApiClientError } from "@web/lib/api-client";
 import type {
   CreateMemberInput,
+  InvitationWithLink,
   CreateRoleInput,
   MemberDto,
   PermissionDto,
@@ -33,6 +34,9 @@ export const accessApi = {
   createUser: (input: CreateMemberInput) => api<MemberDto>("/users", json("POST", input)),
   updateUser: (id: string, input: UpdateMemberInput) => api<MemberDto>(`/users/${id}`, json("PATCH", input)),
   deleteUser: (id: string) => del(`/users/${id}`),
+
+  /** New invite link for an "Invited" user (replaces any earlier link). */
+  inviteUser: (id: string) => api<InvitationWithLink>(`/users/${id}/invite`, json("POST", {})),
 };
 
 /** Applies server field errors to a Formik form; returns the general message otherwise. */
