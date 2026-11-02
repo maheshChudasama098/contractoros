@@ -1,0 +1,231 @@
+// Spec §7–8. Snake_case in DB via @map, camelCase in code.
+// Prisma is NOT the full integrity layer: add CHECK constraints in SQL migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String   @db.VarChar(160)
+  slug            String   @unique @db.VarChar(100)
+  status          String   @default("trial") @db.VarChar(24)
+  timezone        String   @db.VarChar(64)
+  defaultCurrency String   @default("USD") @map("default_currency") @db.Char(3)
+  phone           String?  @db.VarChar(32)
+  email           String?  @db.VarChar(254)
+  website         String?  @db.VarChar(255)
+  addressLine1    String?  @map("address_line1") @db.VarChar(180)
+  addressLine2    String?  @map("address_line2") @db.VarChar(180)
+  city            String?  @db.VarChar(100)
+  state           String?  @db.VarChar(80)
+  postalCode      String?  @map("postal_code") @db.VarChar(20)
+  country         String?  @db.Char(2)
+  settings        Json     @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  memberships OrganizationMembership[]
+  roles       Role[]
+  leads       Lead[]
+  leadSources LeadSource[]
+  auditLogs   AuditLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @unique @db.VarChar(254)
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  name            String    @db.VarChar(160)
+  phone           String?   @db.VarChar(32)
+  status          String    @default("pending") @db.VarChar(24)
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  memberships OrganizationMembership[]
+
+  @@map("users")
+}
+
+model OrganizationMembership {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  status         String    @default("invited") @db.VarChar(24)
+  jobTitle       String?   @map("job_title") @db.VarChar(100)
+  joinedAt       DateTime? @map("joined_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roles        MembershipRole[]
+  ownedLeads   Lead[]
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("organization_memberships")
+}
+
+model Role {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid // null = system role
+  key            String  @db.VarChar(60)
+  name           String  @db.VarChar(100)
+
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  permissions  RolePermission[]
+  memberships  MembershipRole[]
+
+  @@unique([organizationId, key])
+  @@map("roles")
+}
+
+model Permission {
+  id    String           @id @default(uuid()) @db.Uuid
+  key   String           @unique @db.VarChar(80)
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model MembershipRole {
+  membershipId String @map("membership_id") @db.Uuid
+  roleId       String @map("role_id") @db.Uuid
+
+  membership OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  role       Role                   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([membershipId, roleId])
+  @@map("membership_roles")
+}
+
+model LeadSource {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(80)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  leads        Lead[]
+
+  @@index([organizationId])
+  @@map("lead_sources")
+}
+
+model Lead {
+  id                  String    @id @default(uuid()) @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  firstName           String?   @map("first_name") @db.VarChar(100)
+  lastName            String?   @map("last_name") @db.VarChar(100)
+  companyName         String?   @map("company_name") @db.VarChar(160)
+  email               String?   @db.VarChar(254)
+  phone               String?   @db.VarChar(32)
+  sourceId            String?   @map("source_id") @db.Uuid
+  stage               String    @default("new") @db.VarChar(24)
+  ownerMembershipId   String?   @map("owner_membership_id") @db.Uuid
+  estimatedValue      Decimal?  @map("estimated_value") @db.Decimal(12, 2)
+  currency            String    @default("USD") @db.Char(3)
+  nextFollowUpAt      DateTime? @map("next_follow_up_at") @db.Timestamptz
+  lostReason          String?   @map("lost_reason") @db.VarChar(255)
+  convertedCustomerId String?   @map("converted_customer_id") @db.Uuid // FK added with customers module
+  notes               String?
+  createdByUserId     String?   @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  source       LeadSource?             @relation(fields: [sourceId], references: [id])
+  owner        OrganizationMembership? @relation(fields: [ownerMembershipId], references: [id])
+
+  @@index([organizationId, stage])
+  @@index([organizationId, createdAt])
+  @@index([ownerMembershipId])
+  @@map("leads")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  actorType      String   @map("actor_type") @db.VarChar(24)
+  action         String   @db.VarChar(100)
+  entityType     String   @map("entity_type") @db.VarChar(40)
+  entityId       String   @map("entity_id") @db.Uuid
+  requestId      String?  @map("request_id") @db.VarChar(100)
+  ipAddress      String?  @map("ip_address") @db.Inet
+  userAgent      String?  @map("user_agent")
+  beforeSnapshot Json?    @map("before_snapshot")
+  afterSnapshot  Json?    @map("after_snapshot")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, entityType, entityId])
+  @@map("audit_logs")
+}
+
+// Unhandled server errors (5xx). Org/user are nullable: errors can happen before auth resolves.
+model ErrorLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  requestId      String?  @map("request_id") @db.VarChar(100)
+  source         String   @db.VarChar(24) // api | server | worker
+  method         String?  @db.VarChar(10)
+  path           String?  @db.VarChar(500)
+  statusCode     Int?     @map("status_code")
+  errorName      String?  @map("error_name") @db.VarChar(120)
+  message        String
+  stack          String?
+  ipAddress      String?  @map("ip_address") @db.Inet
+  userAgent      String?  @map("user_agent")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([createdAt])
+  @@index([organizationId, createdAt])
+  @@index([requestId])
+  @@map("error_logs")
+}
+
+// Every sign-in attempt, successful or not. userId is null when the email is unknown.
+model LoginLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String?  @map("user_id") @db.Uuid
+  email         String   @db.VarChar(254)
+  success       Boolean
+  failureReason String?  @map("failure_reason") @db.VarChar(60)
+  method        String   @default("password") @db.VarChar(24) // password | magic_link | oauth | invite
+  ipAddress     String?  @map("ip_address") @db.Inet
+  userAgent     String?  @map("user_agent")
+  requestId     String?  @map("request_id") @db.VarChar(100)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([userId, createdAt])
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+  @@map("login_logs")
+}

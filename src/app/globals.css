@@ -1,0 +1,8 @@
+/* MUI (CssBaseline + theme) owns base styles; see src/web/theme. */
+a {
+  color: #b54a1c;
+  text-decoration: none;
+}
+a:hover {
+  color: #96390f;
+}
