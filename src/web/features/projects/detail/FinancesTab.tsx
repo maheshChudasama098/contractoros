@@ -28,7 +28,7 @@ import { Form, Formik } from "formik";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
 import { FieldRow, FormikSelect, FormikTextField } from "@web/components/form";
-import { EmptyState, Muted, SectionCard, Segmented, StatusTag } from "@web/components/ui";
+import { EmptyState, KpiStrip, Muted, SectionCard, Segmented, StatusTag } from "@web/components/ui";
 import { Yup } from "@web/lib/validation";
 import { tokens, type Tone } from "@web/theme/tokens";
 import type { MasterOption } from "@shared/contracts/masters";
@@ -45,11 +45,11 @@ export function FinancesTab({ project, api, onChanged }: { project: ProjectDto; 
     <>
       <Box>
         <Segmented
-          label="Finance sections"
+          label="Budget sections"
           value={sub}
           onChange={setSub}
           options={[
-            { value: "budget", label: "Budget" },
+            { value: "budget", label: "Expenses" },
             { value: "invoices", label: "Invoices" },
             { value: "change_orders", label: "Change orders" },
           ]}
@@ -133,21 +133,24 @@ function Budget({ project, api, onChanged }: { project: ProjectDto; api: Project
   return (
     <>
       {error && <Alert severity="error">{error}</Alert>}
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))" }}>
-        <Summary label="Contract value" value={usd(contract)} />
-        <Summary label="Total expenses" value={usd(total)} />
-        <Summary
-          label={contract - total >= 0 ? "Remaining margin" : "Over budget by"}
-          value={usd(Math.abs(contract - total))}
-          tone={contract && contract - total < 0 ? "danger" : undefined}
-        />
-        <Summary label="Top category" value={byCategory[0] ? `${byCategory[0][0]}` : "—"} hint={byCategory[0] ? usd(byCategory[0][1]) : undefined} />
-      </Box>
+      <KpiStrip
+        items={[
+          { label: "Contract value", value: usd(contract) },
+          { label: "Total expenses", value: usd(total) },
+          {
+            label: contract - total >= 0 ? "Remaining margin" : "Over budget by",
+            value: usd(Math.abs(contract - total)),
+            hintTone: contract && contract - total < 0 ? "danger" : undefined,
+            hint: contract ? `${Math.round((total / contract) * 100)}% of contract spent` : "No contract value set",
+          },
+          { label: "Top category", value: byCategory[0]?.[0] ?? "—", hint: byCategory[0] ? usd(byCategory[0][1]) : undefined },
+        ]}
+      />
 
       <SectionCard
         title="Expenses"
         action={
-          <Button variant="contained" color="success" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
+          <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
             Add expense
           </Button>
         }
@@ -252,16 +255,6 @@ function Budget({ project, api, onChanged }: { project: ProjectDto; api: Project
       />
       <Snackbar open={!!toast} autoHideDuration={4000} onClose={() => setToast(null)} message={toast} />
     </>
-  );
-}
-
-function Summary({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: "danger" }) {
-  return (
-    <Box sx={{ bgcolor: "#fff", border: `1px solid ${tokens.border}`, borderRadius: "12px", px: 2.25, py: 1.75 }}>
-      <Box sx={{ fontSize: 12, color: "text.secondary", fontWeight: 500 }}>{label}</Box>
-      <Box sx={{ fontSize: 20, fontWeight: 600, mt: 0.25, color: tone === "danger" ? tokens.danger : tokens.ink, typography: "num" }}>{value}</Box>
-      {hint && <Muted sx={{ fontSize: 12.5 }}>{hint}</Muted>}
-    </Box>
   );
 }
 

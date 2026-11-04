@@ -4,9 +4,11 @@ import ArrowBackOutlined from "@mui/icons-material/ArrowBackOutlined";
 import AttachMoneyOutlined from "@mui/icons-material/AttachMoneyOutlined";
 import CalendarMonthOutlined from "@mui/icons-material/CalendarMonthOutlined";
 import CheckOutlined from "@mui/icons-material/CheckOutlined";
+import EditOutlined from "@mui/icons-material/EditOutlined";
 import FolderOutlined from "@mui/icons-material/FolderOutlined";
 import ForumOutlined from "@mui/icons-material/ForumOutlined";
 import HomeOutlined from "@mui/icons-material/HomeOutlined";
+import KeyboardArrowDownOutlined from "@mui/icons-material/KeyboardArrowDownOutlined";
 import MoreVertOutlined from "@mui/icons-material/MoreVertOutlined";
 import PlaceOutlined from "@mui/icons-material/PlaceOutlined";
 import TaskAltOutlined from "@mui/icons-material/TaskAltOutlined";
@@ -27,7 +29,7 @@ import { ConfirmDialog } from "@web/components/dialogs";
 import { useBreadcrumbLabel } from "@web/components/layout/breadcrumb-label";
 import { StatusTag, TabBar } from "@web/components/ui";
 import { tokens } from "@web/theme/tokens";
-import { PROJECT_STATUS_LABELS, type ProjectDto, type ProjectInput, type ProjectStatus } from "@shared/contracts/projects";
+import { PROJECT_STATUS_LABELS, PROJECT_STATUSES, type ProjectDto, type ProjectInput, type ProjectStatus } from "@shared/contracts/projects";
 import type { ProjectOverview } from "@shared/contracts/project-detail";
 import { applyApiError } from "@web/features/customers/api";
 import { projectsApi } from "../api";
@@ -40,15 +42,15 @@ import { OverviewTab } from "./OverviewTab";
 import { ScheduleTab } from "./ScheduleTab";
 import { TasksTab } from "./TasksTab";
 
-export const TABS = ["overview", "finances", "schedule", "files", "tasks", "activity"] as const;
+export const TABS = ["overview", "tasks", "schedule", "budget", "files", "activity"] as const;
 export type Tab = (typeof TABS)[number];
 
 const TAB_ITEMS: { value: Tab; label: string; icon: React.ReactNode }[] = [
   { value: "overview", label: "Overview", icon: <HomeOutlined /> },
-  { value: "finances", label: "Finances", icon: <AttachMoneyOutlined /> },
-  { value: "schedule", label: "Schedule", icon: <CalendarMonthOutlined /> },
-  { value: "files", label: "Files", icon: <FolderOutlined /> },
   { value: "tasks", label: "Tasks", icon: <TaskAltOutlined /> },
+  { value: "schedule", label: "Schedule", icon: <CalendarMonthOutlined /> },
+  { value: "budget", label: "Budget", icon: <AttachMoneyOutlined /> },
+  { value: "files", label: "Files", icon: <FolderOutlined /> },
   { value: "activity", label: "Activity", icon: <ForumOutlined /> },
 ];
 
@@ -71,12 +73,14 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const tab: Tab = (TABS as readonly string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as Tab) : "overview";
+  const raw = params.get("tab") === "finances" ? "budget" : params.get("tab"); // old links
+  const tab: Tab = (TABS as readonly string[]).includes(raw ?? "") ? (raw as Tab) : "overview";
   const api = useMemo(() => projectDetailApi(projectId), [projectId]);
 
   const [overview, setOverview] = useState<ProjectOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState<HTMLElement | null>(null);
+  const [statusMenu, setStatusMenu] = useState<HTMLElement | null>(null);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -116,8 +120,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       </Box>
     );
 
-  const closed = project.status === "completed" || project.status === "cancelled";
-
   return (
     <>
       {/* Header */}
@@ -127,10 +129,9 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         </IconButton>
         <Stack sx={{ flex: 1, minWidth: 0 }} gap={0.25}>
           <Stack direction="row" alignItems="center" gap={1.25} flexWrap="wrap">
-            <Typography variant="h1" sx={{ fontSize: 22 }} noWrap>
+            <Typography variant="h1" noWrap>
               {project.name}
             </Typography>
-            <StatusTag tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABELS[project.status]}</StatusTag>
           </Stack>
           <Stack direction="row" alignItems="center" gap={0.5} sx={{ color: "text.secondary", fontSize: 13 }}>
             <PlaceOutlined sx={{ fontSize: 16 }} />
@@ -142,53 +143,55 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           </Stack>
         </Stack>
         <Stack direction="row" gap={1} alignItems="center">
-          {!closed && (
-            <Button variant="contained" color="success" startIcon={<CheckOutlined />} onClick={() => setStatus("completed")}>
-              Complete job
-            </Button>
-          )}
-          {project.status === "planned" && (
-            <Button variant="contained" color="primary" onClick={() => setStatus("active")}>
-              Start job
-            </Button>
-          )}
-          <IconButton aria-label="Project actions" onClick={(e) => setMenu(e.currentTarget)}>
+          <Button
+            variant="contained"
+            color="primary"
+            endIcon={<KeyboardArrowDownOutlined />}
+            onClick={(e) => setStatusMenu(e.currentTarget)}
+            aria-haspopup="menu"
+            aria-label={`Status: ${PROJECT_STATUS_LABELS[project.status]}. Change status`}
+          >
+            {PROJECT_STATUS_LABELS[project.status]}
+          </Button>
+          <Button startIcon={<EditOutlined />} onClick={() => setEditing(true)}>
+            Edit
+          </Button>
+          <IconButton aria-label="More project actions" onClick={(e) => setMenu(e.currentTarget)}>
             <MoreVertOutlined />
           </IconButton>
         </Stack>
       </Stack>
 
-      <Box sx={{ "& nav button": { gap: 1, "& svg": { fontSize: 18 } } }}>
-        <TabBar
-          label="Project sections"
-          value={tab}
-          onChange={goTo}
-          items={TAB_ITEMS.map((t) => ({
-            value: t.value,
-            label: (
-              <>
-                {t.icon}
-                {t.label}
-              </>
-            ),
-          }))}
-        />
-      </Box>
+      <TabBar label="Project sections" value={tab} onChange={goTo} items={TAB_ITEMS} />
 
       {tab === "overview" && <OverviewTab overview={overview} api={api} goTo={goTo} onChanged={load} />}
-      {tab === "finances" && <FinancesTab project={project} api={api} onChanged={load} />}
+      {tab === "tasks" && <TasksTab api={api} onChanged={load} />}
+      {tab === "budget" && <FinancesTab project={project} api={api} onChanged={load} />}
       {tab === "schedule" && <ScheduleTab api={api} onChanged={load} />}
       {tab === "files" && <FilesTab api={api} />}
-      {tab === "tasks" && <TasksTab api={api} onChanged={load} />}
       {tab === "activity" && <ActivityTab api={api} />}
 
+      <Menu
+        anchorEl={statusMenu}
+        open={!!statusMenu}
+        onClose={() => setStatusMenu(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        {PROJECT_STATUSES.map((st) => (
+          <MenuItem
+            key={st}
+            selected={st === project.status}
+            onClick={() => (setStatusMenu(null), st !== project.status && setStatus(st))}
+            sx={{ gap: 1.5, minWidth: 200 }}
+          >
+            <StatusTag tone={STATUS_TONE[st]}>{PROJECT_STATUS_LABELS[st]}</StatusTag>
+            {st === project.status && <CheckOutlined sx={{ fontSize: 17, ml: "auto", color: tokens.brand }} />}
+          </MenuItem>
+        ))}
+      </Menu>
+
       <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)}>
-        <MenuItem onClick={() => (setEditing(true), setMenu(null))}>Edit project</MenuItem>
-        {closed ? (
-          <MenuItem onClick={() => (setMenu(null), setStatus("active"))}>Reopen project</MenuItem>
-        ) : (
-          <MenuItem onClick={() => (setMenu(null), setStatus("cancelled"))}>Cancel project</MenuItem>
-        )}
         <MenuItem onClick={() => (setDeleting(true), setMenu(null))} sx={{ color: tokens.danger }}>
           Delete…
         </MenuItem>

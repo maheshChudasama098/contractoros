@@ -58,10 +58,17 @@ export const ProjectInput = z
 export type ProjectInput = z.input<typeof ProjectInput>;
 export type ProjectData = z.output<typeof ProjectInput>;
 
+export const PROJECT_SORTS = ["name", "project_number", "customer", "planned_start_date", "contract_value", "created_at"] as const;
+export type ProjectSort = (typeof PROJECT_SORTS)[number];
+export type ProjectTab = "open" | "completed" | "cancelled" | "all";
+
 export const ProjectListQuery = PaginationQuery.extend({
   q: z.string().trim().max(100).optional(),
   status: z.enum([...PROJECT_STATUSES, "open", "all"]).default("open"),
   customer_id: z.string().uuid().optional(),
+  priority: z.enum([...PRIORITIES, "all"]).default("all"),
+  sort: z.enum(PROJECT_SORTS).default("created_at"),
+  dir: z.enum(["asc", "desc"]).default("desc"),
 });
 export type ProjectListQuery = z.input<typeof ProjectListQuery>;
 

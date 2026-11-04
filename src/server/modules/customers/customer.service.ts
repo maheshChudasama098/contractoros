@@ -6,8 +6,11 @@ import { authorize } from "@server/core/authorization/policy";
 import { recordAudit } from "@server/core/audit/audit.service";
 import { Errors } from "@server/core/http/errors";
 import type { TenantContext } from "@server/core/tenancy/context";
-import type { Paginated } from "@shared/contracts/api";
-import type { CustomerData, CustomerDto, CustomerListQuery } from "@shared/contracts/customers";
+import type { z } from "zod";
+import type { ListPage } from "@shared/contracts/api";
+import type { CustomerData, CustomerDto, CustomerListQuery, CustomerSort, CustomerTab } from "@shared/contracts/customers";
+
+const SORT_COLUMN: Record<CustomerSort, string> = { display_name: "displayName", billing_city: "billingCity", created_at: "createdAt" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -73,23 +76,46 @@ async function assertUniqueEmail(ctx: TenantContext, email: string | null, excep
 }
 
 export const customerService = {
-  async list(ctx: TenantContext, query: Required<Pick<CustomerListQuery, "page" | "per_page" | "status">> & { q?: string }): Promise<Paginated<CustomerDto>> {
+  async list(ctx: TenantContext, query: z.output<typeof CustomerListQuery>): Promise<ListPage<CustomerDto, CustomerTab>> {
     authorize(ctx, "customer.read");
-    const where: WhereOptions = { organizationId: ctx.organizationId };
-    if (query.status !== "all") Object.assign(where, { status: query.status });
+    // Search + filters apply to every tab; the tab itself is just the status.
+    const base: WhereOptions = { organizationId: ctx.organizationId };
+    if (query.customer_type !== "all") Object.assign(base, { customerType: query.customer_type });
+    if (query.city) Object.assign(base, { billingCity: { [Op.iLike]: query.city } });
     if (query.q) {
       const like = `%${query.q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
-      Object.assign(where, {
+      Object.assign(base, {
         [Op.or]: ["displayName", "email", "phone", "companyName", "billingCity"].map((f) => ({ [f]: { [Op.iLike]: like } })),
       });
     }
-    const { rows, count } = await Customer.findAndCountAll({
-      where,
-      order: [["displayName", "ASC"]],
-      limit: query.per_page,
-      offset: (query.page - 1) * query.per_page,
+    const where = query.status === "all" ? base : { ...base, status: query.status };
+    const [{ rows, count }, grouped] = await Promise.all([
+      Customer.findAndCountAll({
+        where,
+        order: [[SORT_COLUMN[query.sort], query.dir.toUpperCase() === "DESC" ? "DESC NULLS LAST" : "ASC NULLS LAST"], ["id", "ASC"]],
+        limit: query.per_page,
+        offset: (query.page - 1) * query.per_page,
+      }),
+      Customer.count({ where: base, group: ["status"] }) as unknown as Promise<{ status: string; count: number }[]>,
+    ]);
+    const counts = { active: 0, archived: 0, all: 0 };
+    for (const g of grouped) {
+      counts[g.status as "active" | "archived"] = Number(g.count);
+      counts.all += Number(g.count);
+    }
+    return { items: rows.map(toDto), page: query.page, per_page: query.per_page, total: count, counts };
+  },
+
+  /** Distinct billing cities, for the city filter. */
+  async cities(ctx: TenantContext): Promise<string[]> {
+    authorize(ctx, "customer.read");
+    const rows = await Customer.findAll({
+      where: { organizationId: ctx.organizationId, billingCity: { [Op.ne]: null } },
+      attributes: [[Customer.sequelize!.fn("DISTINCT", Customer.sequelize!.col("billing_city")), "city"]],
+      order: [[Customer.sequelize!.col("city"), "ASC"]],
+      raw: true,
     });
-    return { items: rows.map(toDto), page: query.page, per_page: query.per_page, total: count };
+    return (rows as unknown as { city: string }[]).map((r) => r.city).filter(Boolean);
   },
 
   async get(ctx: TenantContext, id: string): Promise<CustomerDto> {

@@ -20,22 +20,37 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
-import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { Form, Formik } from "formik";
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
 import { FieldRow, FormikRadioGroup, FormikTextField } from "@web/components/form";
-import { EmptyState, InitialsAvatar, Muted, PageHeader, SearchField, SectionCard, StatusTag, TabBar, TwoLine } from "@web/components/ui";
+import {
+  EmptyState,
+  FilterSelect,
+  InitialsAvatar,
+  ListCard,
+  Muted,
+  PAGE_SIZES,
+  PageHeader,
+  Pager,
+  SearchField,
+  SortHead,
+  StatusTag,
+  TabBar,
+  TwoLine,
+  type Sort,
+} from "@web/components/ui";
 import { v, Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
+import type { ListPage } from "@shared/contracts/api";
 import type { CustomerDto, CustomerInput, CustomerStatus } from "@shared/contracts/customers";
 import { applyApiError, customersApi } from "./api";
 
 type Tab = CustomerStatus | "all";
-const PAGE_SIZES = [10, 25, 50];
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 const cityLine = (c: CustomerDto) => [c.billing_city, c.billing_state].filter(Boolean).join(", ");
 
 /** Every editable field, so edits always send the full record (PUT). */
@@ -55,13 +70,20 @@ const toInput = (c: CustomerDto): CustomerInput => ({
   status: c.status,
 });
 
+type SortKey = "display_name" | "billing_city" | "created_at";
+type TypeFilter = "all" | "individual" | "company";
+
 export function CustomersView() {
   const [tab, setTab] = useState<Tab>("active");
   const [q, setQ] = useState("");
   const [query, setQuery] = useState(""); // debounced search term
+  const [type, setType] = useState<TypeFilter>("all");
+  const [city, setCity] = useState("all");
+  const [cities, setCities] = useState<string[]>([]);
+  const [sort, setSort] = useState<Sort<SortKey>>({ key: "display_name", dir: "asc" });
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]!);
-  const [data, setData] = useState<{ items: CustomerDto[]; total: number } | null>(null);
+  const [data, setData] = useState<ListPage<CustomerDto, Tab> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ el: HTMLElement; c: CustomerDto } | null>(null);
   const [editing, setEditing] = useState<CustomerDto | "new" | null>(null);
@@ -75,17 +97,40 @@ export function CustomersView() {
 
   const load = useCallback(() => {
     customersApi
-      .list({ status: tab, q: query || undefined, page: page + 1, per_page: perPage })
-      .then((r) => (setData({ items: r.items, total: r.total }), setError(null)))
+      .list({
+        status: tab,
+        q: query || undefined,
+        customer_type: type,
+        city: city === "all" ? undefined : city,
+        sort: sort.key,
+        dir: sort.dir,
+        page: page + 1,
+        per_page: perPage,
+      })
+      .then((r) => (setData(r), setError(null)))
       .catch((e: Error) => setError(e.message));
-  }, [tab, query, page, perPage]);
+  }, [tab, query, type, city, sort, page, perPage]);
   useEffect(load, [load]);
+  useEffect(
+    () =>
+      void customersApi
+        .cities()
+        .then(setCities)
+        .catch(() => {}),
+    [data?.counts.all],
+  );
 
-  const setStatus = async (c: CustomerDto, status: CustomerStatus) => {
+  const reload = () => load();
+  const filtered = !!query || type !== "all" || city !== "all";
+  const clearFilters = () => (setQ(""), setQuery(""), setType("all"), setCity("all"), setPage(0));
+  const onSort = (s: Sort<SortKey>) => (setSort(s), setPage(0));
+  const c = data?.counts;
+
+  const setStatus = async (cust: CustomerDto, status: CustomerStatus) => {
     try {
-      await customersApi.update(c.id, { ...toInput(c), status });
-      setToast(status === "archived" ? `${c.display_name} archived` : `${c.display_name} restored`);
-      load();
+      await customersApi.update(cust.id, { ...toInput(cust), status });
+      setToast(status === "archived" ? `${cust.display_name} archived` : `${cust.display_name} restored`);
+      reload();
     } catch (e) {
       setToast(applyApiError(e, () => {}) ?? "Could not update customer");
     }
@@ -95,7 +140,13 @@ export function CustomersView() {
     <>
       <PageHeader
         title="Customers"
-        subtitle={data ? `${data.total} ${tab === "all" ? "total" : tab}` : "Loading…"}
+        subtitle={
+          c && !filtered
+            ? c.all
+              ? `Homeowners and companies you work for · ${c.active} active, ${c.archived} archived`
+              : "Homeowners and companies you work for. Add one to start estimates and projects."
+            : "Homeowners and companies you work for."
+        }
         actions={
           <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
             New customer
@@ -104,29 +155,73 @@ export function CustomersView() {
       />
       {error && <Alert severity="error">{error}</Alert>}
 
-      <TabBar
-        label="Status"
-        value={tab}
-        onChange={(t) => (setTab(t), setPage(0))}
-        items={[
-          { value: "active", label: "Active" },
-          { value: "archived", label: "Archived" },
-          { value: "all", label: "All" },
-        ]}
-      />
-
-      <SectionCard
-        title="All customers"
-        action={<SearchField label="Search customers" placeholder="Name, email, phone or city" value={q} onChange={setQ} />}
+      <ListCard
+        tabs={
+          <TabBar
+            label="Status"
+            value={tab}
+            onChange={(t) => (setTab(t), setPage(0))}
+            items={[
+              { value: "active", label: "Active", count: c?.active },
+              { value: "archived", label: "Archived", count: c?.archived },
+              { value: "all", label: "All", count: c?.all },
+            ]}
+          />
+        }
+        filters={
+          <>
+            <FilterSelect
+              label="Type"
+              value={type}
+              onChange={(v) => (setType(v), setPage(0))}
+              options={[
+                { value: "all", label: "All" },
+                { value: "individual", label: "Homeowner" },
+                { value: "company", label: "Company" },
+              ]}
+            />
+            {cities.length > 0 && (
+              <FilterSelect
+                label="City"
+                value={city}
+                onChange={(v) => (setCity(v), setPage(0))}
+                options={[{ value: "all", label: "All" }, ...cities.map((x) => ({ value: x, label: x }))]}
+              />
+            )}
+            {filtered && (
+              <Button variant="text" size="small" onClick={clearFilters}>
+                Clear
+              </Button>
+            )}
+          </>
+        }
+        search={
+          <SearchField label="Search customers" placeholder="Name, email, phone or city" value={q} onChange={setQ} />
+        }
       >
         {data && data.items.length === 0 ? (
           <EmptyState
             icon={<PeopleOutline />}
-            title={query ? "No matching customers" : tab === "archived" ? "No archived customers" : "No customers yet"}
-            body={query || tab === "archived" ? undefined : "Add your first customer to start estimates and projects."}
+            title={
+              filtered ? "No matching customers" : tab === "archived" ? "No archived customers" : "No customers yet"
+            }
+            body={
+              filtered
+                ? "Try a different search or clear the filters."
+                : tab === "archived"
+                  ? undefined
+                  : "Add your first customer to start estimates and projects."
+            }
             action={
-              !query && tab !== "archived" ? (
-                <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
+              filtered ? (
+                <Button onClick={clearFilters}>Clear filters</Button>
+              ) : tab !== "archived" ? (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddOutlined />}
+                  onClick={() => setEditing("new")}
+                >
                   New customer
                 </Button>
               ) : undefined
@@ -138,41 +233,62 @@ export function CustomersView() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Customer</TableCell>
+                    <SortHead k="display_name" sort={sort} onSort={onSort}>
+                      Customer
+                    </SortHead>
                     <TableCell>Phone</TableCell>
-                    <TableCell>City</TableCell>
+                    <SortHead k="billing_city" sort={sort} onSort={onSort}>
+                      City
+                    </SortHead>
                     <TableCell>Status</TableCell>
-                    <TableCell>Added</TableCell>
+                    <SortHead k="created_at" sort={sort} onSort={onSort}>
+                      Added
+                    </SortHead>
                     <TableCell align="right">
-                      <Box component="span" sx={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+                      <Box
+                        component="span"
+                        sx={{
+                          position: "absolute",
+                          width: "1px",
+                          height: "1px",
+                          overflow: "hidden",
+                          clip: "rect(0 0 0 0)",
+                        }}
+                      >
                         Actions
                       </Box>
                     </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(data?.items ?? []).map((c) => (
-                    <TableRow key={c.id} hover sx={{ cursor: "pointer" }} onClick={() => setEditing(c)}>
+                  {(data?.items ?? []).map((cust) => (
+                    <TableRow key={cust.id} hover sx={{ cursor: "pointer" }} onClick={() => setEditing(cust)}>
                       <TableCell>
                         <Stack direction="row" gap={1.25} alignItems="center">
-                          <InitialsAvatar name={c.display_name} size={30} />
+                          <InitialsAvatar name={cust.display_name} size={30} />
                           <TwoLine
-                            title={c.display_name}
-                            sub={[c.customer_type === "company" ? "Company" : null, c.email].filter(Boolean).join(" · ") || "No email"}
+                            title={cust.display_name}
+                            sub={
+                              [cust.customer_type === "company" ? "Company" : null, cust.email]
+                                .filter(Boolean)
+                                .join(" · ") || "No email"
+                            }
                           />
                         </Stack>
                       </TableCell>
-                      <TableCell>{c.phone ?? <Muted>—</Muted>}</TableCell>
-                      <TableCell>{cityLine(c) || <Muted>—</Muted>}</TableCell>
+                      <TableCell>{cust.phone ?? <Muted>—</Muted>}</TableCell>
+                      <TableCell>{cityLine(cust) || <Muted>—</Muted>}</TableCell>
                       <TableCell>
-                        <StatusTag tone={c.status === "active" ? "success" : "neutral"}>{c.status === "active" ? "Active" : "Archived"}</StatusTag>
+                        <StatusTag tone={cust.status === "active" ? "success" : "neutral"}>
+                          {cust.status === "active" ? "Active" : "Archived"}
+                        </StatusTag>
                       </TableCell>
-                      <TableCell sx={{ color: "text.secondary" }}>{fmtDate(c.created_at)}</TableCell>
+                      <TableCell sx={{ color: "text.secondary" }}>{fmtDate(cust.created_at)}</TableCell>
                       <TableCell align="right">
                         <IconButton
                           size="small"
-                          aria-label={`Actions for ${c.display_name}`}
-                          onClick={(e) => (e.stopPropagation(), setMenu({ el: e.currentTarget, c }))}
+                          aria-label={`Actions for ${cust.display_name}`}
+                          onClick={(e) => (e.stopPropagation(), setMenu({ el: e.currentTarget, c: cust }))}
                         >
                           <MoreHorizOutlined fontSize="small" />
                         </IconButton>
@@ -182,26 +298,17 @@ export function CustomersView() {
                 </TableBody>
               </Table>
             </TableContainer>
-            {data && (
-              <TablePagination
-                component="div"
-                count={data.total}
-                page={page}
-                rowsPerPage={perPage}
-                rowsPerPageOptions={PAGE_SIZES}
-                onPageChange={(_, p) => setPage(p)}
-                onRowsPerPageChange={(e) => (setPerPage(Number(e.target.value)), setPage(0))}
-                sx={{ borderTop: `1px solid ${tokens.divider}` }}
-              />
-            )}
+            {data && <Pager total={data.total} page={page} perPage={perPage} onPage={setPage} onPerPage={setPerPage} />}
           </>
         )}
-      </SectionCard>
+      </ListCard>
 
       <Menu anchorEl={menu?.el} open={!!menu} onClose={() => setMenu(null)}>
         <MenuItem onClick={() => (setEditing(menu!.c), setMenu(null))}>Edit customer</MenuItem>
         {menu && (
-          <MenuItem onClick={() => (setMenu(null), setStatus(menu.c, menu.c.status === "active" ? "archived" : "active"))}>
+          <MenuItem
+            onClick={() => (setMenu(null), setStatus(menu.c, menu.c.status === "active" ? "archived" : "active"))}
+          >
             {menu.c.status === "active" ? "Archive" : "Restore"}
           </MenuItem>
         )}
@@ -214,7 +321,7 @@ export function CustomersView() {
         <CustomerDialog
           customer={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
-          onSaved={(msg) => (setEditing(null), setToast(msg), load())}
+          onSaved={(msg) => (setEditing(null), setToast(msg), reload())}
         />
       )}
 
@@ -335,27 +442,42 @@ export function CustomerDialog({
                     { value: "company", label: "Company" },
                   ]}
                 />
-                {values.customer_type === "company" && <FormikTextField name="company_name" label="Company name" autoFocus />}
+                {values.customer_type === "company" && (
+                  <FormikTextField name="company_name" label="Company name" autoFocus />
+                )}
                 <FieldRow>
                   <FormikTextField
                     name="first_name"
                     label={values.customer_type === "company" ? "Contact first name" : "First name"}
                     autoFocus={values.customer_type === "individual"}
                   />
-                  <FormikTextField name="last_name" label={values.customer_type === "company" ? "Contact last name" : "Last name"} />
+                  <FormikTextField
+                    name="last_name"
+                    label={values.customer_type === "company" ? "Contact last name" : "Last name"}
+                  />
                 </FieldRow>
                 <FieldRow>
                   <FormikTextField name="email" label="Email" type="email" placeholder="Optional" />
                   <FormikTextField name="phone" label="Phone" type="tel" placeholder="Optional" />
                 </FieldRow>
                 <FormikTextField name="billing_address_line1" label="Billing address" placeholder="Street address" />
-                <FormikTextField name="billing_address_line2" placeholder="Apt, suite (optional)" aria-label="Address line 2" />
+                <FormikTextField
+                  name="billing_address_line2"
+                  placeholder="Apt, suite (optional)"
+                  aria-label="Address line 2"
+                />
                 <FieldRow min={140}>
                   <FormikTextField name="billing_city" label="City" />
                   <FormikTextField name="billing_state" label="State" />
                   <FormikTextField name="billing_postal_code" label="ZIP code" />
                 </FieldRow>
-                <FormikTextField name="notes" label="Notes" multiline minRows={2} placeholder="Gate code, preferred contact time…" />
+                <FormikTextField
+                  name="notes"
+                  label="Notes"
+                  multiline
+                  minRows={2}
+                  placeholder="Gate code, preferred contact time…"
+                />
               </Stack>
             </DialogContent>
             <DialogActions>

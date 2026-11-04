@@ -4,6 +4,11 @@ import Box, { type BoxProps } from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
+import MenuItem from "@mui/material/MenuItem";
+import TableCell from "@mui/material/TableCell";
+import TablePagination from "@mui/material/TablePagination";
+import TableSortLabel from "@mui/material/TableSortLabel";
+import TextField from "@mui/material/TextField";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
@@ -292,29 +297,7 @@ export function Segmented<T extends string>({
   label: string;
 }) {
   return (
-    <ToggleButtonGroup
-      exclusive
-      value={value}
-      aria-label={label}
-      onChange={(_, v: T | null) => v && onChange(v)}
-      sx={{
-        p: "3px",
-        bgcolor: tokens.hover,
-        borderRadius: "9px",
-        "& .MuiToggleButton-root": {
-          border: 0,
-          height: 34,
-          px: 1.75,
-          borderRadius: "7px !important",
-          textTransform: "none",
-          fontSize: 13.5,
-          fontWeight: 500,
-          color: "text.secondary",
-          "&.Mui-selected": { bgcolor: "#fff", color: tokens.ink, boxShadow: "0 1px 2px rgba(16,24,40,.08)" },
-          "&.Mui-selected:hover": { bgcolor: "#fff" },
-        },
-      }}
-    >
+    <ToggleButtonGroup exclusive value={value} aria-label={label} onChange={(_, v: T | null) => v && onChange(v)}>
       {options.map((o) => (
         <ToggleButton key={o.value} value={o.value}>
           {o.label}
@@ -425,7 +408,7 @@ export function TabBar<T extends string>({
 }: {
   value: T;
   onChange: (v: T) => void;
-  items: { value: T; label: ReactNode; count?: ReactNode }[];
+  items: { value: T; label: ReactNode; icon?: ReactNode; count?: ReactNode }[];
   label: string;
 }) {
   return (
@@ -448,6 +431,7 @@ export function TabBar<T extends string>({
               display: "inline-flex",
               alignItems: "center",
               gap: 0.75,
+              "& svg": { fontSize: 18 },
               height: 44,
               px: 0.25,
               border: 0,
@@ -462,6 +446,7 @@ export function TabBar<T extends string>({
               "&:hover": { color: tokens.ink },
             }}
           >
+            {i.icon}
             {i.label}
             {i.count != null && <Num sx={{ fontSize: 12, color: "text.secondary" }}>{i.count}</Num>}
           </Box>
@@ -499,3 +484,152 @@ export function Toolbar({ children }: { children: ReactNode }) {
 
 export const money =(n: number, cents = false) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
+
+export const PAGE_SIZES = [10, 25, 50];
+
+/** Standard pager under every paginated table. `page` is 0-based. */
+export function Pager({
+  total,
+  page,
+  perPage,
+  onPage,
+  onPerPage,
+}: {
+  total: number;
+  page: number;
+  perPage: number;
+  onPage: (page: number) => void;
+  onPerPage: (perPage: number) => void;
+}) {
+  return (
+    <TablePagination
+      component="div"
+      count={total}
+      page={page}
+      rowsPerPage={perPage}
+      rowsPerPageOptions={PAGE_SIZES}
+      onPageChange={(_, p) => onPage(p)}
+      onRowsPerPageChange={(e) => (onPerPage(Number(e.target.value)), onPage(0))}
+    />
+  );
+}
+
+/**
+ * Standard list layout: status tabs above the card; inside the card a toolbar with
+ * filters on the left and search on the right, then the table (or empty state) and pager.
+ * The page's primary action lives in its PageHeader, not here.
+ */
+export function ListCard({
+  tabs,
+  filters,
+  search,
+  children,
+}: {
+  tabs?: ReactNode;
+  filters?: ReactNode;
+  search?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      {tabs}
+      <Card sx={{ overflow: "hidden" }}>
+        {(filters || search) && (
+          <Stack
+            direction="row"
+            flexWrap="wrap"
+            alignItems="center"
+            gap={1}
+            sx={{ px: 2.5, py: 1.25, borderBottom: `1px solid ${tokens.divider}` }}
+          >
+            {filters}
+            <Box sx={{ ml: "auto", display: "flex", flex: "1 1 260px", justifyContent: "flex-end", minWidth: 0 }}>{search}</Box>
+          </Stack>
+        )}
+        {children}
+      </Card>
+    </>
+  );
+}
+
+/** Compact dropdown filter for a list toolbar: shows "Label: Value". */
+export function FilterSelect<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <TextField
+      select
+      size="small"
+      value={value}
+      onChange={(e) => onChange(e.target.value as T)}
+      aria-label={label}
+      sx={{ minWidth: 150 }}
+      SelectProps={{
+        renderValue: (v) => (
+          <Box component="span" sx={{ fontSize: 13.5 }}>
+            <Box component="span" sx={{ color: "text.secondary" }}>
+              {label}:
+            </Box>{" "}
+            {options.find((o) => o.value === v)?.label}
+          </Box>
+        ),
+      }}
+    >
+      {options.map((o) => (
+        <MenuItem key={o.value} value={o.value}>
+          {o.label}
+        </MenuItem>
+      ))}
+    </TextField>
+  );
+}
+
+export type Sort<K extends string> = { key: K; dir: "asc" | "desc" };
+
+/** Sortable column header. Clicking the active column flips the direction. */
+export function SortHead<K extends string>({
+  k,
+  sort,
+  onSort,
+  children,
+  align,
+}: {
+  k: K;
+  sort: Sort<K>;
+  onSort: (s: Sort<K>) => void;
+  children: ReactNode;
+  align?: "right";
+}) {
+  const active = sort.key === k;
+  return (
+    <TableCell align={align} sortDirection={active ? sort.dir : false}>
+      <TableSortLabel
+        active={active}
+        direction={active ? sort.dir : "asc"}
+        onClick={() => onSort({ key: k, dir: active && sort.dir === "asc" ? "desc" : "asc" })}
+      >
+        {children}
+      </TableSortLabel>
+    </TableCell>
+  );
+}
+
+/** Client-side sort for small, fully loaded lists. Nulls/empties always sort last. */
+export function sortRows<T, K extends string>(rows: T[], sort: Sort<K>, value: (row: T, key: K) => string | number | null | undefined): T[] {
+  const sign = sort.dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = value(a, sort.key);
+    const y = value(b, sort.key);
+    if (x == null || x === "") return y == null || y === "" ? 0 : 1;
+    if (y == null || y === "") return -1;
+    return sign * (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true }));
+  });
+}

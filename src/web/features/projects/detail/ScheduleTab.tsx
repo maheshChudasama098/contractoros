@@ -78,10 +78,7 @@ export function ScheduleTab({ api, onChanged }: { api: ProjectDetailApi; onChang
 
   return (
     <>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
-        <Typography variant="h2" sx={{ fontSize: 20 }}>
-          Schedule
-        </Typography>
+      <Stack direction="row" alignItems="center" justifyContent="flex-end" flexWrap="wrap" gap={1.5}>
         <Stack direction="row" gap={1.5} alignItems="center">
           <Segmented
             label="Schedule view"
@@ -92,7 +89,7 @@ export function ScheduleTab({ api, onChanged }: { api: ProjectDetailApi; onChang
               { value: "list", label: <Stack direction="row" gap={0.75} alignItems="center"><ViewListOutlined sx={{ fontSize: 17 }} />List</Stack> },
             ]}
           />
-          <Button variant="contained" color="success" startIcon={<AddOutlined />} onClick={() => setEditing({ start_date: today })}>
+          <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing({ start_date: today })}>
             Create
           </Button>
         </Stack>

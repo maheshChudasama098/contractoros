@@ -23,7 +23,6 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
-import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import { Form, Formik, useFormikContext } from "formik";
@@ -31,7 +30,23 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
 import { FieldRow, FormikSelect, FormikTextField } from "@web/components/form";
-import { EmptyState, Muted, PageHeader, SearchField, SectionCard, StatusTag, TabBar, TwoLine, money } from "@web/components/ui";
+import {
+  EmptyState,
+  FilterSelect,
+  ListCard,
+  Muted,
+  PAGE_SIZES,
+  PageHeader,
+  Pager,
+  SearchField,
+  SortHead,
+  StatusTag,
+  TabBar,
+  TwoLine,
+  money,
+  type Sort,
+} from "@web/components/ui";
+import type { ListPage } from "@shared/contracts/api";
 import { Yup } from "@web/lib/validation";
 import { tokens, type Tone } from "@web/theme/tokens";
 import type { CustomerDto } from "@shared/contracts/customers";
@@ -43,13 +58,14 @@ import {
   type ProjectDto,
   type ProjectInput,
   type ProjectStatus,
+  type ProjectTab,
 } from "@shared/contracts/projects";
 import { applyApiError, customersApi } from "@web/features/customers/api";
 import { CustomerDialog } from "@web/features/customers/CustomersView";
 import { projectsApi } from "./api";
 
-type Tab = "open" | "completed" | "cancelled" | "all";
-const PAGE_SIZES = [10, 25, 50];
+type Tab = ProjectTab;
+type SortKey = "name" | "customer" | "planned_start_date" | "contract_value" | "created_at";
 
 export const STATUS_TONE: Record<ProjectStatus, Tone> = {
   planned: "neutral",
@@ -62,7 +78,9 @@ export const STATUS_TONE: Record<ProjectStatus, Tone> = {
 const PRIORITY_LABEL: Record<Priority, string> = { low: "Low", normal: "Normal", high: "High", urgent: "Urgent" };
 
 const fmtDate = (d: string | null) =>
-  d ? new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : null;
+  d
+    ? new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : null;
 const dateRange = (p: ProjectDto) => {
   const s = fmtDate(p.planned_start_date);
   const e = fmtDate(p.planned_end_date);
@@ -90,9 +108,11 @@ export function ProjectsView() {
   const [tab, setTab] = useState<Tab>("open");
   const [q, setQ] = useState("");
   const [query, setQuery] = useState(""); // debounced search term
+  const [priority, setPriority] = useState<"all" | Priority>("all");
+  const [sort, setSort] = useState<Sort<SortKey>>({ key: "created_at", dir: "desc" });
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]!);
-  const [data, setData] = useState<{ items: ProjectDto[]; total: number } | null>(null);
+  const [data, setData] = useState<ListPage<ProjectDto, Tab> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ el: HTMLElement; p: ProjectDto } | null>(null);
   const [editing, setEditing] = useState<ProjectDto | "new" | null>(null);
@@ -106,10 +126,23 @@ export function ProjectsView() {
 
   const load = useCallback(() => {
     projectsApi
-      .list({ status: tab, q: query || undefined, page: page + 1, per_page: perPage })
-      .then((r) => (setData({ items: r.items, total: r.total }), setError(null)))
+      .list({
+        status: tab,
+        q: query || undefined,
+        priority,
+        sort: sort.key,
+        dir: sort.dir,
+        page: page + 1,
+        per_page: perPage,
+      })
+      .then((r) => (setData(r), setError(null)))
       .catch((e: Error) => setError(e.message));
-  }, [tab, query, page, perPage]);
+  }, [tab, query, priority, sort, page, perPage]);
+
+  const filtered = !!query || priority !== "all";
+  const clearFilters = () => (setQ(""), setQuery(""), setPriority("all"), setPage(0));
+  const onSort = (s: Sort<SortKey>) => (setSort(s), setPage(0));
+  const c = data?.counts;
   useEffect(load, [load]);
 
   const setStatus = async (p: ProjectDto, status: ProjectStatus) => {
@@ -126,7 +159,13 @@ export function ProjectsView() {
     <>
       <PageHeader
         title="Projects"
-        subtitle={data ? `${data.total} ${tab === "all" ? "total" : tab}` : "Loading…"}
+        subtitle={
+          c && !filtered
+            ? c.all
+              ? `Jobs you're running for your customers · ${c.open} open, ${c.completed} completed`
+              : "Jobs you're running for your customers. Create one to start tracking tasks, schedule and costs."
+            : "Jobs you're running for your customers."
+        }
         actions={
           <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
             New project
@@ -135,30 +174,69 @@ export function ProjectsView() {
       />
       {error && <Alert severity="error">{error}</Alert>}
 
-      <TabBar
-        label="Status"
-        value={tab}
-        onChange={(t) => (setTab(t), setPage(0))}
-        items={[
-          { value: "open", label: "Open" },
-          { value: "completed", label: "Completed" },
-          { value: "cancelled", label: "Cancelled" },
-          { value: "all", label: "All" },
-        ]}
-      />
-
-      <SectionCard
-        title="All projects"
-        action={<SearchField label="Search projects" placeholder="Name, number, customer or city" value={q} onChange={setQ} />}
+      <ListCard
+        tabs={
+          <TabBar
+            label="Status"
+            value={tab}
+            onChange={(t) => (setTab(t), setPage(0))}
+            items={[
+              { value: "open", label: "Open", count: c?.open },
+              { value: "completed", label: "Completed", count: c?.completed },
+              { value: "cancelled", label: "Cancelled", count: c?.cancelled },
+              { value: "all", label: "All", count: c?.all },
+            ]}
+          />
+        }
+        filters={
+          <>
+            <FilterSelect
+              label="Priority"
+              value={priority}
+              onChange={(v) => (setPriority(v), setPage(0))}
+              options={[
+                { value: "all", label: "All" },
+                ...PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABEL[p] })),
+              ]}
+            />
+            {filtered && (
+              <Button variant="text" size="small" onClick={clearFilters}>
+                Clear
+              </Button>
+            )}
+          </>
+        }
+        search={
+          <SearchField label="Search projects" placeholder="Name, number, customer or city" value={q} onChange={setQ} />
+        }
       >
         {data && data.items.length === 0 ? (
           <EmptyState
             icon={<HomeOutlined />}
-            title={query ? "No matching projects" : tab === "open" ? "No open projects" : `No ${tab === "all" ? "" : tab + " "}projects`}
-            body={query || tab !== "open" ? undefined : "Create a project for a customer to start tracking the work."}
+            title={
+              filtered
+                ? "No matching projects"
+                : tab === "open"
+                  ? "No open projects"
+                  : `No ${tab === "all" ? "" : tab + " "}projects`
+            }
+            body={
+              filtered
+                ? "Try a different search or clear the filters."
+                : tab !== "open"
+                  ? undefined
+                  : "Create a project for a customer to start tracking the work."
+            }
             action={
-              !query && tab === "open" ? (
-                <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
+              filtered ? (
+                <Button onClick={clearFilters}>Clear filters</Button>
+              ) : tab === "open" ? (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddOutlined />}
+                  onClick={() => setEditing("new")}
+                >
                   New project
                 </Button>
               ) : undefined
@@ -170,13 +248,30 @@ export function ProjectsView() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Project</TableCell>
-                    <TableCell>Customer</TableCell>
-                    <TableCell>Schedule</TableCell>
+                    <SortHead k="name" sort={sort} onSort={onSort}>
+                      Project
+                    </SortHead>
+                    <SortHead k="customer" sort={sort} onSort={onSort}>
+                      Customer
+                    </SortHead>
+                    <SortHead k="planned_start_date" sort={sort} onSort={onSort}>
+                      Schedule
+                    </SortHead>
                     <TableCell>Status</TableCell>
-                    <TableCell align="right">Contract value</TableCell>
+                    <SortHead k="contract_value" sort={sort} onSort={onSort} align="right">
+                      Contract value
+                    </SortHead>
                     <TableCell align="right">
-                      <Box component="span" sx={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+                      <Box
+                        component="span"
+                        sx={{
+                          position: "absolute",
+                          width: "1px",
+                          height: "1px",
+                          overflow: "hidden",
+                          clip: "rect(0 0 0 0)",
+                        }}
+                      >
                         Actions
                       </Box>
                     </TableCell>
@@ -184,12 +279,19 @@ export function ProjectsView() {
                 </TableHead>
                 <TableBody>
                   {(data?.items ?? []).map((p) => (
-                    <TableRow key={p.id} hover sx={{ cursor: "pointer" }} onClick={() => router.push(`/projects/${p.id}`)}>
+                    <TableRow
+                      key={p.id}
+                      hover
+                      sx={{ cursor: "pointer" }}
+                      onClick={() => router.push(`/projects/${p.id}`)}
+                    >
                       <TableCell>
                         <TwoLine title={p.name} sub={`${p.project_number} · ${p.site.city}, ${p.site.state}`} />
                       </TableCell>
                       <TableCell>{p.customer.display_name}</TableCell>
-                      <TableCell sx={{ color: "text.secondary" }}>{dateRange(p) ?? <Muted>Not scheduled</Muted>}</TableCell>
+                      <TableCell sx={{ color: "text.secondary" }}>
+                        {dateRange(p) ?? <Muted>Not scheduled</Muted>}
+                      </TableCell>
                       <TableCell>
                         <Stack direction="row" gap={0.75} alignItems="center">
                           <StatusTag tone={STATUS_TONE[p.status]}>{PROJECT_STATUS_LABELS[p.status]}</StatusTag>
@@ -217,21 +319,10 @@ export function ProjectsView() {
                 </TableBody>
               </Table>
             </TableContainer>
-            {data && (
-              <TablePagination
-                component="div"
-                count={data.total}
-                page={page}
-                rowsPerPage={perPage}
-                rowsPerPageOptions={PAGE_SIZES}
-                onPageChange={(_, n) => setPage(n)}
-                onRowsPerPageChange={(e) => (setPerPage(Number(e.target.value)), setPage(0))}
-                sx={{ borderTop: `1px solid ${tokens.divider}` }}
-              />
-            )}
+            {data && <Pager total={data.total} page={page} perPage={perPage} onPage={setPage} onPerPage={setPerPage} />}
           </>
         )}
-      </SectionCard>
+      </ListCard>
 
       <Menu anchorEl={menu?.el} open={!!menu} onClose={() => setMenu(null)}>
         <MenuItem onClick={() => (setEditing(menu!.p), setMenu(null))}>Edit project</MenuItem>
@@ -309,7 +400,10 @@ const schema = Yup.object({
   }),
   contract_value: Yup.string()
     .trim()
-    .matches(/^\d{1,10}(\.\d{1,2})?$/, { message: "Enter an amount like 25000 or 25000.50.", excludeEmptyString: true }),
+    .matches(/^\d{1,10}(\.\d{1,2})?$/, {
+      message: "Enter an amount like 25000 or 25000.50.",
+      excludeEmptyString: true,
+    }),
   site_address_line1: Yup.string().trim().required("Job site address is required."),
   site_city: Yup.string().trim().required("City is required."),
   site_state: Yup.string().trim().required("State is required."),
@@ -365,7 +459,13 @@ function CustomerPicker({ initial }: { initial: { id: string; display_name: stri
         <FormLabel htmlFor="customer_id" error={showError}>
           Customer
         </FormLabel>
-        <Button size="small" variant="text" startIcon={<PersonAddAltOutlined />} onClick={() => setAdding(true)} sx={{ px: 0.5 }}>
+        <Button
+          size="small"
+          variant="text"
+          startIcon={<PersonAddAltOutlined />}
+          onClick={() => setAdding(true)}
+          sx={{ px: 0.5 }}
+        >
           New customer
         </Button>
       </Stack>
@@ -390,13 +490,23 @@ function CustomerPicker({ initial }: { initial: { id: string; display_name: stri
         noOptionsText={
           <Stack gap={1} alignItems="flex-start">
             <Box>{input ? "No matching customers" : "No active customers yet"}</Box>
-            <Button size="small" startIcon={<PersonAddAltOutlined />} onMouseDown={(e) => e.preventDefault()} onClick={() => setAdding(true)}>
+            <Button
+              size="small"
+              startIcon={<PersonAddAltOutlined />}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setAdding(true)}
+            >
               Add new customer
             </Button>
           </Stack>
         }
         renderInput={(params) => (
-          <TextField {...params} placeholder="Search customers" error={showError} helperText={showError ? errors.customer_id : undefined} />
+          <TextField
+            {...params}
+            placeholder="Search customers"
+            error={showError}
+            helperText={showError ? errors.customer_id : undefined}
+          />
         )}
       />
       {value && hasBillingAddress(value) && !siteEmpty && (
@@ -485,16 +595,43 @@ export function ProjectDialog({
                 <CustomerPicker initial={project ? project.customer : null} />
                 <FormikTextField name="name" label="Project name" placeholder="Kitchen remodel" />
                 <FieldRow>
-                  <FormikSelect name="status" label="Status" options={PROJECT_STATUSES.map((s) => ({ value: s, label: PROJECT_STATUS_LABELS[s] }))} />
-                  <FormikSelect name="priority" label="Priority" options={PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))} />
+                  <FormikSelect
+                    name="status"
+                    label="Status"
+                    options={PROJECT_STATUSES.map((s) => ({ value: s, label: PROJECT_STATUS_LABELS[s] }))}
+                  />
+                  <FormikSelect
+                    name="priority"
+                    label="Priority"
+                    options={PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))}
+                  />
                 </FieldRow>
                 <FieldRow>
-                  <FormikTextField name="planned_start_date" label="Planned start" type="date" slotProps={{ inputLabel: { shrink: true } }} />
-                  <FormikTextField name="planned_end_date" label="Planned end" type="date" slotProps={{ inputLabel: { shrink: true } }} />
+                  <FormikTextField
+                    name="planned_start_date"
+                    label="Planned start"
+                    type="date"
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                  <FormikTextField
+                    name="planned_end_date"
+                    label="Planned end"
+                    type="date"
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
                 </FieldRow>
-                <FormikTextField name="contract_value" label="Contract value (USD)" inputMode="decimal" placeholder="0.00" />
+                <FormikTextField
+                  name="contract_value"
+                  label="Contract value (USD)"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                />
                 <FormikTextField name="site_address_line1" label="Job site address" placeholder="Street address" />
-                <FormikTextField name="site_address_line2" placeholder="Apt, suite (optional)" aria-label="Address line 2" />
+                <FormikTextField
+                  name="site_address_line2"
+                  placeholder="Apt, suite (optional)"
+                  aria-label="Address line 2"
+                />
                 <FieldRow min={140}>
                   <FormikTextField name="site_city" label="City" />
                   <FormikTextField name="site_state" label="State" />

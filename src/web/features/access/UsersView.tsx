@@ -27,13 +27,18 @@ import { ConfirmDialog } from "@web/components/dialogs";
 import { FormikPasswordField, FormikSelect, FormikTextField } from "@web/components/form";
 import {
   EmptyState,
+  FilterSelect,
   InitialsAvatar,
+  ListCard,
   Muted,
   PageHeader,
   SearchField,
-  SectionCard,
+  SortHead,
+  sortRows,
   StatusTag,
+  TabBar,
   TwoLine,
+  type Sort,
 } from "@web/components/ui";
 import { v, Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
@@ -70,6 +75,9 @@ export function UsersView() {
   const [roles, setRoles] = useState<RoleDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [tab, setTab] = useState<"all" | MemberDto["status"]>("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [sort, setSort] = useState<Sort<"name" | "role" | "last_login_at">>({ key: "name", dir: "asc" });
   const [menu, setMenu] = useState<{ el: HTMLElement; m: MemberDto } | null>(null);
   const [editing, setEditing] = useState<MemberDto | "new" | null>(null);
   const [removing, setRemoving] = useState<MemberDto | null>(null);
@@ -83,10 +91,26 @@ export function UsersView() {
   }, []);
   useEffect(load, [load]);
 
+  // Search + role filter apply to every tab; tab counts reflect them.
+  const matching = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return (users ?? []).filter(
+      (m) =>
+        (!t || `${m.name} ${m.email} ${m.job_title ?? ""}`.toLowerCase().includes(t)) &&
+        (roleFilter === "all" || m.role?.id === roleFilter),
+    );
+  }, [users, q, roleFilter]);
+  const count = (st: MemberDto["status"]) => matching.filter((m) => m.status === st).length;
   const rows = useMemo(
-    () => (users ?? []).filter((m) => `${m.name} ${m.email}`.toLowerCase().includes(q.trim().toLowerCase())),
-    [users, q],
+    () =>
+      sortRows(
+        matching.filter((m) => tab === "all" || m.status === tab),
+        sort,
+        (m, k) => (k === "role" ? m.role?.name : k === "last_login_at" ? m.last_login_at : m.name.toLowerCase()),
+      ),
+    [matching, tab, sort],
   );
+  const filtered = !!q.trim() || roleFilter !== "all";
   const active = users?.filter((u) => u.status === "active").length ?? 0;
   const invited = users?.filter((u) => u.status === "invited").length ?? 0;
 
@@ -105,40 +129,90 @@ export function UsersView() {
         title="Users"
         subtitle={
           users
-            ? `${active} active · ${users.length} total${invited ? ` · ${invited} invited` : ""}`
-            : "Loading…"
+            ? `People who can sign in to your company · ${active} active${invited ? `, ${invited} invited` : ""}`
+            : "People who can sign in to your company."
         }
         actions={
-          <Button variant="contained" color="primary" startIcon={<PersonAddAltOutlined />} onClick={() => setEditing("new")}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<PersonAddAltOutlined />}
+            onClick={() => setEditing("new")}
+          >
             Add user
           </Button>
         }
       />
       {error && <Alert severity="error">{error}</Alert>}
 
-      <SectionCard
-        title="All users"
-        action={<SearchField label="Filter users" placeholder="Search name or email" value={q} onChange={setQ} />}
+      <ListCard
+        tabs={
+          <TabBar
+            label="Status"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { value: "all", label: "All", count: users ? matching.length : undefined },
+              { value: "active", label: "Active", count: users ? count("active") : undefined },
+              { value: "invited", label: "Invited", count: users ? count("invited") : undefined },
+              { value: "suspended", label: "Suspended", count: users ? count("suspended") : undefined },
+            ]}
+          />
+        }
+        filters={
+          <>
+            <FilterSelect
+              label="Role"
+              value={roleFilter}
+              onChange={setRoleFilter}
+              options={[{ value: "all", label: "All" }, ...roles.map((r) => ({ value: r.id, label: r.name }))]}
+            />
+            {filtered && (
+              <Button variant="text" size="small" onClick={() => (setQ(""), setRoleFilter("all"))}>
+                Clear
+              </Button>
+            )}
+          </>
+        }
+        search={<SearchField label="Search users" placeholder="Name, email or job title" value={q} onChange={setQ} />}
       >
         {users && rows.length === 0 ? (
           <EmptyState
             icon={<PersonAddAltOutlined />}
-            title={q ? "No matching users" : "No users yet"}
-            body={q ? undefined : "Add your first teammate to get started."}
+            title={filtered ? "No matching users" : tab === "all" ? "No users yet" : `No ${tab} users`}
+            body={
+              filtered
+                ? "Try a different search or clear the filters."
+                : tab === "all"
+                  ? "Add your first teammate to get started."
+                  : undefined
+            }
           />
         ) : (
           <TableContainer>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Roles</TableCell>
+                  <SortHead k="name" sort={sort} onSort={setSort}>
+                    Name
+                  </SortHead>
+                  <SortHead k="role" sort={sort} onSort={setSort}>
+                    Role
+                  </SortHead>
                   <TableCell>Status</TableCell>
-                  <TableCell>Last sign-in</TableCell>
+                  <SortHead k="last_login_at" sort={sort} onSort={setSort}>
+                    Last sign-in
+                  </SortHead>
                   <TableCell align="right">
                     <Box
                       component="span"
-                      sx={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)" }}
+                      sx={{
+                        position: "absolute",
+                        width: "1px",
+                        height: "1px",
+                        overflow: "hidden",
+                        clip: "rect(0 0 0 0)",
+                      }}
                     >
                       Actions
                     </Box>
@@ -185,7 +259,7 @@ export function UsersView() {
             </Table>
           </TableContainer>
         )}
-      </SectionCard>
+      </ListCard>
 
       {link && <InviteLinkDialog invite={link} onClose={() => setLink(null)} />}
 
@@ -345,7 +419,9 @@ function UserDialog({
                 name: vals.name.trim(),
                 job_title: vals.job_title.trim() || null,
                 ...(!member.is_self && { role_id: vals.role_id }),
-                ...(!member.is_self && vals.status !== "invited" && member.status !== "invited" && { status: vals.status }),
+                ...(!member.is_self &&
+                  vals.status !== "invited" &&
+                  member.status !== "invited" && { status: vals.status }),
               });
               onSaved(`${vals.name} updated`);
             }
@@ -427,7 +503,8 @@ function InviteLinkDialog({ invite, onClose }: { invite: InvitationWithLink; onC
         <Stack gap={2}>
           <Muted sx={{ fontSize: 13.5 }}>
             Send this link to <strong>{invite.email}</strong>
-            {invite.role ? ` to join as ${invite.role.name}` : ""}. It expires on {fmtDate(invite.expires_at)} and works once.
+            {invite.role ? ` to join as ${invite.role.name}` : ""}. It expires on {fmtDate(invite.expires_at)} and works
+            once.
           </Muted>
           <Stack direction="row" gap={1} alignItems="center">
             <Box
@@ -436,7 +513,18 @@ function InviteLinkDialog({ invite, onClose }: { invite: InvitationWithLink; onC
               value={invite.invite_url}
               onFocus={(e: React.FocusEvent<HTMLInputElement>) => e.currentTarget.select()}
               aria-label="Invite link"
-              sx={{ flex: 1, minWidth: 0, height: 40, px: 1.5, border: `1px solid ${tokens.borderStrong}`, borderRadius: "8px", font: "inherit", fontSize: 13, bgcolor: tokens.surfaceMuted, color: tokens.ink2 }}
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                height: 40,
+                px: 1.5,
+                border: `1px solid ${tokens.borderStrong}`,
+                borderRadius: "8px",
+                font: "inherit",
+                fontSize: 13,
+                bgcolor: tokens.surfaceMuted,
+                color: tokens.ink2,
+              }}
             />
             <Button startIcon={<ContentCopyOutlined />} onClick={copy}>
               {copied ? "Copied" : "Copy"}

@@ -58,11 +58,20 @@ export const CustomerInput = CustomerFields.superRefine(requireName);
 export type CustomerInput = z.input<typeof CustomerInput>;
 export type CustomerData = z.output<typeof CustomerInput>;
 
+export const CUSTOMER_SORTS = ["display_name", "billing_city", "created_at"] as const;
+export type CustomerSort = (typeof CUSTOMER_SORTS)[number];
+
 export const CustomerListQuery = PaginationQuery.extend({
   q: z.string().trim().max(100).optional(),
   status: z.enum([...CUSTOMER_STATUSES, "all"]).default("active"),
+  customer_type: z.enum([...CUSTOMER_TYPES, "all"]).default("all"),
+  city: z.string().trim().max(100).optional(),
+  sort: z.enum(CUSTOMER_SORTS).default("display_name"),
+  dir: z.enum(["asc", "desc"]).default("asc"),
 });
 export type CustomerListQuery = z.input<typeof CustomerListQuery>;
+
+export type CustomerTab = CustomerStatus | "all";
 
 export type CustomerDto = {
   id: string;

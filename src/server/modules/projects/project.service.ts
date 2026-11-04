@@ -6,11 +6,26 @@ import { authorize } from "@server/core/authorization/policy";
 import { recordAudit } from "@server/core/audit/audit.service";
 import { Errors } from "@server/core/http/errors";
 import type { TenantContext } from "@server/core/tenancy/context";
-import type { Paginated } from "@shared/contracts/api";
-import { OPEN_PROJECT_STATUSES, type ProjectData, type ProjectDto } from "@shared/contracts/projects";
+import type { z } from "zod";
+import type { ListPage } from "@shared/contracts/api";
+import {
+  OPEN_PROJECT_STATUSES,
+  type ProjectData,
+  type ProjectDto,
+  type ProjectListQuery,
+  type ProjectSort,
+  type ProjectTab,
+} from "@shared/contracts/projects";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FIRST_NUMBER = 1001;
+const SORT_COLUMN: Record<Exclude<ProjectSort, "customer">, string> = {
+  name: "name",
+  project_number: "projectNumber",
+  planned_start_date: "plannedStartDate",
+  contract_value: "contractValue",
+  created_at: "createdAt",
+};
 
 const include = [
   { model: Customer, as: "customer", attributes: ["id", "displayName"] },
@@ -104,15 +119,15 @@ async function nextNumber(ctx: TenantContext, transaction: Transaction) {
 }
 
 export const projectService = {
-  async list(ctx: TenantContext, query: { page: number; per_page: number; status: string; q?: string; customer_id?: string }): Promise<Paginated<ProjectDto>> {
+  async list(ctx: TenantContext, query: z.output<typeof ProjectListQuery>): Promise<ListPage<ProjectDto, ProjectTab>> {
     authorize(ctx, "project.read");
-    const where: WhereOptions = { organizationId: ctx.organizationId };
-    if (query.status === "open") Object.assign(where, { status: OPEN_PROJECT_STATUSES });
-    else if (query.status !== "all") Object.assign(where, { status: query.status });
-    if (query.customer_id) Object.assign(where, { customerId: query.customer_id });
+    // Search + filters apply to every tab; the tab itself is just the status.
+    const base: WhereOptions = { organizationId: ctx.organizationId };
+    if (query.customer_id) Object.assign(base, { customerId: query.customer_id });
+    if (query.priority !== "all") Object.assign(base, { priority: query.priority });
     if (query.q) {
       const like = `%${query.q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
-      Object.assign(where, {
+      Object.assign(base, {
         [Op.or]: [
           { name: { [Op.iLike]: like } },
           { projectNumber: { [Op.iLike]: like } },
@@ -121,15 +136,39 @@ export const projectService = {
         ],
       });
     }
-    const { rows, count } = await Project.findAndCountAll({
-      where,
-      include,
-      order: [["createdAt", "DESC"]],
-      limit: query.per_page,
-      offset: (query.page - 1) * query.per_page,
-      distinct: true,
-    });
-    return { items: rows.map(toDto), page: query.page, per_page: query.per_page, total: count };
+    const where =
+      query.status === "open"
+        ? { ...base, status: OPEN_PROJECT_STATUSES }
+        : query.status === "all"
+          ? base
+          : { ...base, status: query.status };
+    const dir = query.dir === "desc" ? "DESC NULLS LAST" : "ASC NULLS LAST";
+    const order = (query.sort === "customer" ? [[{ model: Customer, as: "customer" }, "displayName", dir]] : [[SORT_COLUMN[query.sort], dir]]) as never[];
+    const [{ rows, count }, grouped] = await Promise.all([
+      Project.findAndCountAll({
+        where,
+        include,
+        order: [...order, ["id", "ASC"]] as never,
+        limit: query.per_page,
+        offset: (query.page - 1) * query.per_page,
+        distinct: true,
+      }),
+      Project.findAll({
+        where: base,
+        include: include.map((i) => ({ ...i, attributes: [] })),
+        attributes: ["status", [sequelize.fn("COUNT", sequelize.col("Project.id")), "n"]],
+        group: ["Project.status"],
+        raw: true,
+      }) as unknown as Promise<{ status: string; n: string }[]>,
+    ]);
+    const counts: Record<ProjectTab, number> = { open: 0, completed: 0, cancelled: 0, all: 0 };
+    for (const g of grouped) {
+      const n = Number(g.n);
+      counts.all += n;
+      if (g.status === "completed" || g.status === "cancelled") counts[g.status] += n;
+      else counts.open += n;
+    }
+    return { items: rows.map(toDto), page: query.page, per_page: query.per_page, total: count, counts };
   },
 
   async get(ctx: TenantContext, id: string): Promise<ProjectDto> {

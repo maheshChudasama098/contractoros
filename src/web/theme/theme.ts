@@ -195,6 +195,64 @@ export const theme = createTheme({
         },
       },
     },
+    MuiTableSortLabel: {
+      styleOverrides: {
+        root: { "&:hover": { color: tokens.ink }, "&.Mui-active": { color: tokens.ink } },
+        icon: { fontSize: 16 },
+      },
+    },
+    MuiTablePagination: {
+      defaultProps: { rowsPerPageOptions: [10, 25, 50] },
+      styleOverrides: {
+        root: { borderTop: `1px solid ${tokens.divider}`, color: tokens.ink2 },
+        toolbar: { minHeight: 52, paddingLeft: 20, paddingRight: 12 },
+        selectLabel: { fontSize: 13, color: tokens.muted },
+        displayedRows: { fontSize: 13, color: tokens.muted },
+        // The global 40px select height doesn't fit the compact pagination row.
+        select: { "&&": { height: 32, lineHeight: "32px", fontSize: 13 } },
+        input: { marginRight: 20 },
+        actions: { "& .MuiIconButton-root": { width: 32, height: 32 } },
+      },
+    },
+    MuiPopover: {
+      styleOverrides: {
+        paper: { border: `1px solid ${tokens.border}`, borderRadius: 10, boxShadow: "0 8px 24px rgba(16,24,40,.12)" },
+      },
+    },
+    MuiMenu: { styleOverrides: { list: { padding: 6, minWidth: 180 } } },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          fontSize: 13.5,
+          borderRadius: 6,
+          minHeight: 36,
+          padding: "6px 10px",
+          "&:hover": { background: tokens.hover },
+          "&.Mui-selected, &.Mui-selected:hover": { background: tokens.brandSoft },
+          "& .MuiListItemIcon-root": { minWidth: 30, color: tokens.ink2 },
+        },
+      },
+    },
+    // Segmented control (used for in-card filters and view switches).
+    MuiToggleButtonGroup: {
+      styleOverrides: { root: { padding: 3, background: tokens.hover, borderRadius: 9, gap: 2 } },
+    },
+    MuiToggleButton: {
+      styleOverrides: {
+        root: {
+          border: 0,
+          height: 34,
+          padding: "0 14px",
+          borderRadius: "7px !important",
+          textTransform: "none",
+          fontSize: 13.5,
+          fontWeight: 500,
+          color: tokens.muted,
+          "&.Mui-selected, &.Mui-selected:hover": { background: "#fff", color: tokens.ink, boxShadow: "0 1px 2px rgba(16,24,40,.08)" },
+        },
+      },
+    },
+    MuiBreadcrumbs: { styleOverrides: { root: { fontSize: 13 }, separator: { color: tokens.subtle } } },
     MuiChip: { styleOverrides: { root: { borderRadius: 6, fontWeight: 500 } } },
     MuiDialog: {
       styleOverrides: { paper: { borderRadius: 16, boxShadow: "0 24px 48px rgba(16,24,40,.18)" } },

@@ -1,6 +1,6 @@
 import { api, ApiClientError } from "@web/lib/api-client";
-import type { Paginated } from "@shared/contracts/api";
-import type { CustomerDto, CustomerInput, CustomerListQuery } from "@shared/contracts/customers";
+import type { ListPage } from "@shared/contracts/api";
+import type { CustomerDto, CustomerInput, CustomerListQuery, CustomerTab } from "@shared/contracts/customers";
 
 const json = (method: string, body: unknown) => ({ method, body: JSON.stringify(body) });
 
@@ -9,8 +9,9 @@ export const customersApi = {
     const params = new URLSearchParams(
       Object.entries(q).flatMap(([k, val]) => (val === undefined || val === "" ? [] : [[k, String(val)]])),
     );
-    return api<Paginated<CustomerDto>>(`/customers?${params}`);
+    return api<ListPage<CustomerDto, CustomerTab>>(`/customers?${params}`);
   },
+  cities: () => api<string[]>("/customers/cities"),
   create: (input: CustomerInput) => api<CustomerDto>("/customers", json("POST", input)),
   update: (id: string, input: CustomerInput) => api<CustomerDto>(`/customers/${id}`, json("PUT", input)),
   // DELETE returns 204 with no body, so it can't go through `api()` (which parses JSON).

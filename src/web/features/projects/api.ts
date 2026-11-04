@@ -1,6 +1,6 @@
 import { api, ApiClientError } from "@web/lib/api-client";
-import type { Paginated } from "@shared/contracts/api";
-import type { ProjectDto, ProjectInput, ProjectListQuery } from "@shared/contracts/projects";
+import type { ListPage } from "@shared/contracts/api";
+import type { ProjectDto, ProjectInput, ProjectListQuery, ProjectTab } from "@shared/contracts/projects";
 
 const json = (method: string, body: unknown) => ({ method, body: JSON.stringify(body) });
 
@@ -9,7 +9,7 @@ export const projectsApi = {
     const params = new URLSearchParams(
       Object.entries(q).flatMap(([k, val]) => (val === undefined || val === "" ? [] : [[k, String(val)]])),
     );
-    return api<Paginated<ProjectDto>>(`/projects?${params}`);
+    return api<ListPage<ProjectDto, ProjectTab>>(`/projects?${params}`);
   },
   create: (input: ProjectInput) => api<ProjectDto>("/projects", json("POST", input)),
   update: (id: string, input: ProjectInput) => api<ProjectDto>(`/projects/${id}`, json("PUT", input)),

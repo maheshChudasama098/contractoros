@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FieldRow, FormikPasswordField, FormikTextField } from "@web/components/form";
-import { InitialsAvatar, Muted, SectionCard } from "@web/components/ui";
+import { InitialsAvatar, Muted, PageHeader, SectionCard } from "@web/components/ui";
 import { ApiClientError } from "@web/lib/api-client";
 import { v, Yup } from "@web/lib/validation";
 import { authApi, authErrorMessage } from "@web/features/auth/api";
@@ -35,7 +35,10 @@ export function ProfileView() {
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    authApi.me().then(setMe).catch((e) => setError(authErrorMessage(e)));
+    authApi
+      .me()
+      .then(setMe)
+      .catch((e) => setError(authErrorMessage(e)));
   }, []);
 
   if (!me) return error ? <Alert severity="error">{error}</Alert> : <CircularProgress sx={{ alignSelf: "center" }} />;
@@ -102,42 +105,50 @@ export function ChangePasswordView() {
   const [done, setDone] = useState(false);
 
   return (
-    <Box sx={{ maxWidth: 560, width: "100%" }}>
-      <SectionCard title="Change password" bodySx={{ p: 2.5 }}>
-        <Formik
-          initialValues={{ currentPassword: "", newPassword: "", confirm: "" }}
-          validationSchema={passwordSchema}
-          onSubmit={async (vals, { setStatus, setFieldError, resetForm }) => {
-            setStatus(null);
-            setDone(false);
-            try {
-              await authApi.changePassword({ currentPassword: vals.currentPassword, newPassword: vals.newPassword });
-              resetForm();
-              setDone(true);
-            } catch (e) {
-              setStatus(applyErrors(e, setFieldError));
-            }
-          }}
-        >
-          {({ isSubmitting, status }) => (
-            <Stack component={Form} noValidate gap={2.5}>
-              {done && <Alert severity="success">Password updated. Other devices have been signed out.</Alert>}
-              {status && <Alert severity="error">{status}</Alert>}
-              <FormikPasswordField name="currentPassword" label="Current password" autoComplete="current-password" />
-              <FormikPasswordField name="newPassword" label="New password" autoComplete="new-password" hint="At least 10 characters." />
-              <FormikPasswordField name="confirm" label="Confirm new password" autoComplete="new-password" />
-              <Stack direction="row" justifyContent="flex-end" gap={1}>
-                <Button component={Link} href="/profile">
-                  Cancel
-                </Button>
-                <Button type="submit" variant="contained" color="primary" disabled={isSubmitting}>
-                  Update password
-                </Button>
+    <>
+      <PageHeader title="Change password" subtitle="Other devices are signed out after you change it." />
+      <Box sx={{ maxWidth: 560, width: "100%" }}>
+        <SectionCard bodySx={{ p: 2.5 }}>
+          <Formik
+            initialValues={{ currentPassword: "", newPassword: "", confirm: "" }}
+            validationSchema={passwordSchema}
+            onSubmit={async (vals, { setStatus, setFieldError, resetForm }) => {
+              setStatus(null);
+              setDone(false);
+              try {
+                await authApi.changePassword({ currentPassword: vals.currentPassword, newPassword: vals.newPassword });
+                resetForm();
+                setDone(true);
+              } catch (e) {
+                setStatus(applyErrors(e, setFieldError));
+              }
+            }}
+          >
+            {({ isSubmitting, status }) => (
+              <Stack component={Form} noValidate gap={2.5}>
+                {done && <Alert severity="success">Password updated. Other devices have been signed out.</Alert>}
+                {status && <Alert severity="error">{status}</Alert>}
+                <FormikPasswordField name="currentPassword" label="Current password" autoComplete="current-password" />
+                <FormikPasswordField
+                  name="newPassword"
+                  label="New password"
+                  autoComplete="new-password"
+                  hint="At least 10 characters."
+                />
+                <FormikPasswordField name="confirm" label="Confirm new password" autoComplete="new-password" />
+                <Stack direction="row" justifyContent="flex-end" gap={1}>
+                  <Button component={Link} href="/profile">
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="contained" color="primary" disabled={isSubmitting}>
+                    Update password
+                  </Button>
+                </Stack>
               </Stack>
-            </Stack>
-          )}
-        </Formik>
-      </SectionCard>
-    </Box>
+            )}
+          </Formik>
+        </SectionCard>
+      </Box>
+    </>
   );
 }

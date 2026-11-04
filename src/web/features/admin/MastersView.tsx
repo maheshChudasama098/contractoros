@@ -25,7 +25,18 @@ import { Form, Formik } from "formik";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
 import { FieldRow, FormikSwitch, FormikTextField } from "@web/components/form";
-import { EmptyState, PageHeader, SearchField, SectionCard, StatusTag, TabBar } from "@web/components/ui";
+import {
+  EmptyState,
+  FilterSelect,
+  ListCard,
+  PageHeader,
+  SearchField,
+  SortHead,
+  sortRows,
+  StatusTag,
+  TabBar,
+  type Sort,
+} from "@web/components/ui";
 import { Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
 import { MASTER_TYPE_KEYS, MASTER_TYPES, type MasterItemDto, type MasterType } from "@shared/contracts/masters";
@@ -39,6 +50,8 @@ export function MastersView() {
   const [items, setItems] = useState<MasterItemDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
+  const [sort, setSort] = useState<Sort<"name" | "sort_order" | "in_use">>({ key: "sort_order", dir: "asc" });
   const [menu, setMenu] = useState<{ el: HTMLElement; item: MasterItemDto } | null>(null);
   const [editing, setEditing] = useState<MasterItemDto | "new" | null>(null);
   const [deleting, setDeleting] = useState<MasterItemDto | null>(null);
@@ -55,8 +68,15 @@ export function MastersView() {
 
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return (items ?? []).filter((i) => !t || `${i.name} ${i.code ?? ""}`.toLowerCase().includes(t));
-  }, [items, q]);
+    const list = (items ?? []).filter(
+      (i) =>
+        (!t || `${i.name} ${i.code ?? ""}`.toLowerCase().includes(t)) &&
+        (status === "all" || (status === "active") === i.is_active),
+    );
+    return sortRows(list, sort, (i, k) => (k === "name" ? i.name.toLowerCase() : i[k]));
+  }, [items, q, status, sort]);
+  const filtered = !!q.trim() || status !== "all";
+  const inactive = items?.filter((i) => !i.is_active).length ?? 0;
 
   const toggleActive = async (item: MasterItemDto) => {
     try {
@@ -71,8 +91,12 @@ export function MastersView() {
   return (
     <>
       <PageHeader
-        eyebrow="Admin"
         title="Master data"
+        subtitle={
+          items
+            ? `Lists every company picks from · ${items.length} ${meta.label.toLowerCase()}${inactive ? `, ${inactive} inactive` : ""}`
+            : "Lists every company picks from."
+        }
         actions={
           <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
             Add {meta.singular.toLowerCase()}
@@ -81,24 +105,55 @@ export function MastersView() {
       />
       {error && <Alert severity="error">{error}</Alert>}
 
-      <TabBar
-        label="Master lists"
-        value={type}
-        onChange={(t) => (setType(t), setItems(null), setQ(""))}
-        items={MASTER_TYPE_KEYS.map((k) => ({ value: k, label: MASTER_TYPES[k].label }))}
-      />
-
-      <SectionCard
-        title={meta.label}
-        action={<SearchField label={`Search ${meta.label.toLowerCase()}`} placeholder="Search" value={q} onChange={setQ} />}
+      <ListCard
+        tabs={
+          <TabBar
+            label="Master lists"
+            value={type}
+            onChange={(t) => (setType(t), setItems(null), setQ(""), setStatus("all"))}
+            items={MASTER_TYPE_KEYS.map((k) => ({ value: k, label: MASTER_TYPES[k].label }))}
+          />
+        }
+        filters={
+          <>
+            <FilterSelect
+              label="Status"
+              value={status}
+              onChange={setStatus}
+              options={[
+                { value: "all", label: "All" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+              ]}
+            />
+            {filtered && (
+              <Button variant="text" size="small" onClick={() => (setQ(""), setStatus("all"))}>
+                Clear
+              </Button>
+            )}
+          </>
+        }
+        search={
+          <SearchField
+            label={`Search ${meta.label.toLowerCase()}`}
+            placeholder={meta.hasCode ? "Name or code" : "Name"}
+            value={q}
+            onChange={setQ}
+          />
+        }
       >
         {items && rows.length === 0 ? (
           <EmptyState
             icon={<TuneOutlined />}
-            title={q ? "No matches" : `No ${meta.label.toLowerCase()} yet`}
+            title={filtered ? "No matches" : `No ${meta.label.toLowerCase()} yet`}
             action={
-              !q ? (
-                <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
+              !filtered ? (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddOutlined />}
+                  onClick={() => setEditing("new")}
+                >
                   Add {meta.singular.toLowerCase()}
                 </Button>
               ) : undefined
@@ -109,13 +164,28 @@ export function MastersView() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Name</TableCell>
+                  <SortHead k="name" sort={sort} onSort={setSort}>
+                    Name
+                  </SortHead>
                   {meta.hasCode && <TableCell>Code</TableCell>}
-                  <TableCell align="right">Order</TableCell>
+                  <SortHead k="sort_order" sort={sort} onSort={setSort} align="right">
+                    Order
+                  </SortHead>
                   <TableCell>Status</TableCell>
-                  <TableCell>Used by</TableCell>
+                  <SortHead k="in_use" sort={sort} onSort={setSort}>
+                    Used by
+                  </SortHead>
                   <TableCell align="right">
-                    <Box component="span" sx={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+                    <Box
+                      component="span"
+                      sx={{
+                        position: "absolute",
+                        width: "1px",
+                        height: "1px",
+                        overflow: "hidden",
+                        clip: "rect(0 0 0 0)",
+                      }}
+                    >
                       Actions
                     </Box>
                   </TableCell>
@@ -136,7 +206,9 @@ export function MastersView() {
                       {i.sort_order}
                     </TableCell>
                     <TableCell>
-                      <StatusTag tone={i.is_active ? "success" : "neutral"}>{i.is_active ? "Active" : "Inactive"}</StatusTag>
+                      <StatusTag tone={i.is_active ? "success" : "neutral"}>
+                        {i.is_active ? "Active" : "Inactive"}
+                      </StatusTag>
                     </TableCell>
                     <TableCell sx={{ color: "text.secondary" }}>{usedBy(i.in_use)}</TableCell>
                     <TableCell align="right">
@@ -154,11 +226,15 @@ export function MastersView() {
             </Table>
           </TableContainer>
         )}
-      </SectionCard>
+      </ListCard>
 
       <Menu anchorEl={menu?.el} open={!!menu} onClose={() => setMenu(null)}>
         <MenuItem onClick={() => (setEditing(menu!.item), setMenu(null))}>Edit</MenuItem>
-        {menu && <MenuItem onClick={() => (setMenu(null), toggleActive(menu.item))}>{menu.item.is_active ? "Deactivate" : "Activate"}</MenuItem>}
+        {menu && (
+          <MenuItem onClick={() => (setMenu(null), toggleActive(menu.item))}>
+            {menu.item.is_active ? "Deactivate" : "Activate"}
+          </MenuItem>
+        )}
         <MenuItem onClick={() => (setDeleting(menu!.item), setMenu(null))} sx={{ color: tokens.danger }}>
           Delete…
         </MenuItem>
@@ -270,7 +346,11 @@ function MasterDialog({
                   )}
                   <FormikTextField name="sort_order" label="Order" inputMode="numeric" hint="Lower shows first." />
                 </FieldRow>
-                <FormikSwitch name="is_active" label="Active" description="Inactive items are hidden from menus but kept on existing companies." />
+                <FormikSwitch
+                  name="is_active"
+                  label="Active"
+                  description="Inactive items are hidden from menus but kept on existing companies."
+                />
               </Stack>
             </DialogContent>
             <DialogActions>

@@ -1,6 +1,5 @@
 "use client";
 
-import AddOutlined from "@mui/icons-material/AddOutlined";
 import MoreHorizOutlined from "@mui/icons-material/MoreHorizOutlined";
 import SearchOutlined from "@mui/icons-material/SearchOutlined";
 import UnfoldMoreOutlined from "@mui/icons-material/UnfoldMoreOutlined";
@@ -10,7 +9,6 @@ import Button from "@mui/material/Button";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -225,12 +223,19 @@ function useBreadcrumbs() {
   return crumbs;
 }
 
+/**
+ * The page itself renders its title (PageHeader), so the top bar only shows where you came from:
+ * nothing on a top-level page, "Projects" on a project, "Projects / P-1001" deeper down.
+ */
+function useParentCrumbs() {
+  return useBreadcrumbs().slice(0, -1);
+}
+
 export function AppShell({ user, children }: { user: ShellUser; children: ReactNode }) {
   const path = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const crumbs = useBreadcrumbs();
-  const title = crumbs.at(-1)?.label ?? "ContractorOS";
+  const parents = useParentCrumbs();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -282,13 +287,9 @@ export function AppShell({ user, children }: { user: ShellUser; children: ReactN
             borderBottom: `1px solid ${tokens.border}`,
           }}
         >
-          <Logo withText={false} />
-          <Typography
-            sx={{ flex: 1, minWidth: 0, fontSize: 17, fontWeight: 600, letterSpacing: "-0.02em", ml: 0.5 }}
-            noWrap
-          >
-            {title}
-          </Typography>
+          <Box component={Link} href="/dashboard" aria-label="Dashboard" sx={{ flex: 1, minWidth: 0 }}>
+            <Logo />
+          </Box>
           <IconButton aria-label="Search" onClick={() => setSearchOpen(true)} sx={{ width: 44, height: 44 }}>
             <SearchOutlined />
           </IconButton>
@@ -311,40 +312,19 @@ export function AppShell({ user, children }: { user: ShellUser; children: ReactN
             borderBottom: `1px solid ${tokens.border}`,
           }}
         >
-          <Breadcrumbs aria-label="Breadcrumb" sx={{ fontSize: 13 }}>
-            {crumbs.map((c, i) =>
-              i === crumbs.length - 1 ? (
-                <Typography key={c.href} aria-current="page" sx={{ fontSize: 13, fontWeight: 500 }}>
-                  {c.label}
-                </Typography>
-              ) : (
-                <Box
-                  key={c.href}
-                  component={Link}
-                  href={c.href}
-                  sx={{ color: "text.secondary", "&:hover": { color: tokens.ink } }}
-                >
-                  {c.label}
-                </Box>
-              ),
-            )}
-          </Breadcrumbs>
-          <Stack direction="row" alignItems="center" gap={1} sx={{ ml: "auto" }}>
-            <Button
-              onClick={() => setSearchOpen(true)}
-              startIcon={<SearchOutlined sx={{ fontSize: "15px !important" }} />}
-              sx={{ width: 280, justifyContent: "flex-start", color: "text.secondary", fontWeight: 400 }}
-            >
-              Search or jump to…
-              <Box sx={{ ml: "auto" }}>
-                <Kbd>⌘K</Kbd>
-              </Box>
-            </Button>
-            <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setSearchOpen(true)}>
-              Create
-            </Button>
+          <Button
+            onClick={() => setSearchOpen(true)}
+            startIcon={<SearchOutlined sx={{ fontSize: "15px !important" }} />}
+            sx={{ width: 320, justifyContent: "flex-start", color: "text.secondary", fontWeight: 400 }}
+          >
+            Search or jump to…
+            <Box sx={{ ml: "auto" }}>
+              <Kbd>⌘K</Kbd>
+            </Box>
+          </Button>
+          <Box sx={{ ml: "auto" }}>
             <UserMenu user={user} />
-          </Stack>
+          </Box>
         </Stack>
 
         <Box
@@ -360,6 +340,16 @@ export function AppShell({ user, children }: { user: ShellUser; children: ReactN
             gap: { xs: 2, md: 3 },
           }}
         >
+          {parents.length > 0 && (
+            // Where you came from; the page renders its own title below.
+            <Breadcrumbs aria-label="Breadcrumb" sx={{ mb: { xs: -1, md: -2 } }}>
+              {parents.map((c) => (
+                <Box key={c.href} component={Link} href={c.href} sx={{ color: "text.secondary", "&:hover": { color: tokens.ink } }}>
+                  {c.label}
+                </Box>
+              ))}
+            </Breadcrumbs>
+          )}
           {children}
         </Box>
       </Box>

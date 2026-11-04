@@ -21,11 +21,23 @@ import Typography from "@mui/material/Typography";
 import { Form, Formik, useFormikContext } from "formik";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
 import { useBreadcrumbLabel } from "@web/components/layout/breadcrumb-label";
 import { FormikTextField } from "@web/components/form";
-import { Muted, PageHeader, SectionCard, StatusTag } from "@web/components/ui";
+import {
+  EmptyState,
+  ListCard,
+  Muted,
+  PageHeader,
+  SearchField,
+  SectionCard,
+  SortHead,
+  sortRows,
+  StatusTag,
+  TabBar,
+  type Sort,
+} from "@web/components/ui";
 import { v, Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
 import { PERMISSION_GROUPS, type RoleDto } from "@shared/contracts/access";
@@ -35,10 +47,16 @@ const TOTAL_PERMISSIONS = PERMISSION_GROUPS.reduce((n, g) => n + g.items.length,
 
 // ------------------------------------------------------------------ List
 
+type RoleTab = "all" | "system" | "custom";
+type RoleSort = "name" | "permissions" | "members";
+
 export function RolesView() {
   const router = useRouter();
   const [roles, setRoles] = useState<RoleDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<RoleTab>("all");
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<Sort<RoleSort>>({ key: "name", dir: "asc" });
 
   useEffect(() => {
     accessApi
@@ -47,12 +65,31 @@ export function RolesView() {
       .catch((e: Error) => setError(e.message));
   }, []);
 
+  const matching = useMemo(
+    () => (roles ?? []).filter((r) => r.name.toLowerCase().includes(q.trim().toLowerCase())),
+    [roles, q],
+  );
+  const rows = useMemo(
+    () =>
+      sortRows(
+        matching.filter((r) => tab === "all" || (tab === "system") === r.system),
+        sort,
+        (r, k) =>
+          k === "permissions" ? r.permissions.length : k === "members" ? r.member_count : r.name.toLowerCase(),
+      ),
+    [matching, tab, sort],
+  );
+  const custom = roles?.filter((r) => !r.system).length ?? 0;
+
   return (
     <>
       <PageHeader
-        eyebrow="Auth"
         title="Roles"
-        subtitle="Roles bundle permissions. Every request is checked on the server against the user's roles."
+        subtitle={
+          roles
+            ? `What each person is allowed to do · ${roles.length - custom} system, ${custom} custom`
+            : "What each person is allowed to do."
+        }
         actions={
           <Button
             variant="contained"
@@ -65,46 +102,74 @@ export function RolesView() {
         }
       />
       {error && <Alert severity="error">{error}</Alert>}
-      <SectionCard title="All roles">
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Role</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Permissions</TableCell>
-                <TableCell align="right">Users</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {roles?.map((r) => (
-                <TableRow key={r.id} hover sx={{ cursor: "pointer" }} onClick={() => router.push(`/roles/${r.id}`)}>
-                  <TableCell sx={{ fontWeight: 500 }}>
-                    <Link href={`/roles/${r.id}`} onClick={(e) => e.stopPropagation()} style={{ color: "inherit" }}>
-                      {r.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    {r.system ? (
-                      <StatusTag tone="neutral" dot={false}>
-                        System
-                      </StatusTag>
-                    ) : (
-                      <StatusTag tone="brand" dot={false}>
-                        Custom
-                      </StatusTag>
-                    )}
-                  </TableCell>
-                  <TableCell sx={{ color: "text.secondary" }}>
-                    {r.permissions.length} of {TOTAL_PERMISSIONS}
-                  </TableCell>
-                  <TableCell align="right">{r.member_count}</TableCell>
+      <ListCard
+        tabs={
+          <TabBar
+            label="Role type"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { value: "all", label: "All", count: roles ? matching.length : undefined },
+              { value: "system", label: "System", count: roles ? matching.filter((r) => r.system).length : undefined },
+              { value: "custom", label: "Custom", count: roles ? matching.filter((r) => !r.system).length : undefined },
+            ]}
+          />
+        }
+        search={<SearchField label="Search roles" placeholder="Role name" value={q} onChange={setQ} />}
+      >
+        {roles && rows.length === 0 ? (
+          <EmptyState
+            icon={<LockOutlined />}
+            title={q ? "No matching roles" : tab === "custom" ? "No custom roles yet" : "No roles"}
+            body={tab === "custom" && !q ? "Copy a system role or start from scratch to fit your team." : undefined}
+          />
+        ) : (
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <SortHead k="name" sort={sort} onSort={setSort}>
+                    Role
+                  </SortHead>
+                  <TableCell>Type</TableCell>
+                  <SortHead k="permissions" sort={sort} onSort={setSort}>
+                    Permissions
+                  </SortHead>
+                  <SortHead k="members" sort={sort} onSort={setSort} align="right">
+                    Users
+                  </SortHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </SectionCard>
+              </TableHead>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} hover sx={{ cursor: "pointer" }} onClick={() => router.push(`/roles/${r.id}`)}>
+                    <TableCell sx={{ fontWeight: 500 }}>
+                      <Link href={`/roles/${r.id}`} onClick={(e) => e.stopPropagation()} style={{ color: "inherit" }}>
+                        {r.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      {r.system ? (
+                        <StatusTag tone="neutral" dot={false}>
+                          System
+                        </StatusTag>
+                      ) : (
+                        <StatusTag tone="brand" dot={false}>
+                          Custom
+                        </StatusTag>
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ color: "text.secondary" }}>
+                      {r.permissions.length} of {TOTAL_PERMISSIONS}
+                    </TableCell>
+                    <TableCell align="right">{r.member_count}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </ListCard>
     </>
   );
 }
@@ -126,7 +191,9 @@ function PermissionMatrix({ readOnly }: { readOnly: boolean }) {
   };
 
   return (
-    <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "repeat(2, minmax(0, 1fr))" } }}>
+    <Box
+      sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "repeat(2, minmax(0, 1fr))" } }}
+    >
       {PERMISSION_GROUPS.map((g) => {
         const keys = g.items.map((i) => i.key);
         const n = keys.filter((k) => has.has(k)).length;
@@ -134,7 +201,14 @@ function PermissionMatrix({ readOnly }: { readOnly: boolean }) {
           <Box
             key={g.group}
             component="fieldset"
-            sx={{ m: 0, p: 0, minWidth: 0, border: `1px solid ${tokens.border}`, borderRadius: "12px", overflow: "hidden" }}
+            sx={{
+              m: 0,
+              p: 0,
+              minWidth: 0,
+              border: `1px solid ${tokens.border}`,
+              borderRadius: "12px",
+              overflow: "hidden",
+            }}
           >
             <Box
               component="label"
