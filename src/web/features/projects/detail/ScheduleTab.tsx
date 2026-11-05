@@ -8,7 +8,6 @@ import ViewListOutlined from "@mui/icons-material/ViewListOutlined";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -19,13 +18,13 @@ import Typography from "@mui/material/Typography";
 import { Form, Formik } from "formik";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
-import { FieldRow, FormikSwitch, FormikTextField } from "@web/components/form";
-import { EmptyState, Muted, SectionCard, Segmented } from "@web/components/ui";
+import { FieldRow, FormikSelect, FormikSwitch, FormikTextField } from "@web/components/form";
+import { EmptyState, Muted, SectionCard, Segmented, FormDrawer } from "@web/components/ui";
 import { Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
 import type { ProjectEventDto, ProjectEventInput } from "@shared/contracts/project-detail";
 import { applyApiError } from "@web/features/customers/api";
-import { fmtDay, fmtTime, todayYmd, type ProjectDetailApi } from "./api";
+import { fmtDay, fmtTime, projectDetailApi, todayYmd, type ProjectDetailApi } from "./api";
 
 type View = "month" | "list";
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -220,28 +219,45 @@ export function ScheduleTab({ api, onChanged }: { api: ProjectDetailApi; onChang
   );
 }
 
-type EventForm = { title: string; start_date: string; end_date: string; all_day: boolean; start_time: string; end_time: string; notes: string };
+type EventForm = {
+  project_id: string;
+  title: string;
+  start_date: string;
+  end_date: string;
+  all_day: boolean;
+  start_time: string;
+  end_time: string;
+  notes: string;
+};
 
-function EventDialog({
+/**
+ * Create / edit a schedule item. Inside a project pass `api`; from the company calendar pass
+ * `projects` instead and a "Project" picker is shown for new items.
+ */
+export function EventDialog({
   api,
+  projects,
   event,
   defaultDate,
   onClose,
   onSaved,
 }: {
-  api: ProjectDetailApi;
+  api: ProjectDetailApi | null;
+  projects?: { value: string; label: string }[];
   event: ProjectEventDto | null;
   defaultDate: string;
   onClose: () => void;
   onSaved: (msg: string) => void;
 }) {
   const isNew = !event;
+  const pickProject = !api && !!projects;
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+    <FormDrawer open onClose={onClose}>
       <Formik<EventForm>
         initialValues={{
+          project_id: "",
           title: event?.title ?? "",
           start_date: event?.start_date ?? defaultDate,
           end_date: event?.end_date ?? defaultDate,
@@ -251,6 +267,7 @@ function EventDialog({
           notes: event?.notes ?? "",
         }}
         validationSchema={Yup.object({
+          ...(pickProject && { project_id: Yup.string().required("Choose a project.") }),
           title: Yup.string().trim().required("Title is required.").max(180),
           start_date: Yup.string().required("Start date is required."),
           end_date: Yup.string()
@@ -265,10 +282,11 @@ function EventDialog({
         })}
         onSubmit={async (vals, { setStatus, setFieldError }) => {
           setStatus(null);
-          const input: ProjectEventInput = vals;
+          const { project_id, ...input } = vals as EventForm;
+          const target = api ?? projectDetailApi(project_id);
           try {
-            if (isNew) await api.createEvent(input);
-            else await api.updateEvent(event.id, input);
+            if (isNew) await target.createEvent(input as ProjectEventInput);
+            else await target.updateEvent(event.id, input as ProjectEventInput);
             onSaved(isNew ? `"${vals.title}" scheduled` : "Schedule updated");
           } catch (e) {
             setStatus(applyApiError(e, setFieldError));
@@ -281,6 +299,15 @@ function EventDialog({
             <DialogContent>
               <Stack gap={2}>
                 {status && <Alert severity="error">{status}</Alert>}
+                {pickProject && isNew && (
+                  <FormikSelect
+                    name="project_id"
+                    label="Project"
+                    options={projects!}
+                    SelectProps={{ displayEmpty: true, renderValue: (v) => projects!.find((p) => p.value === v)?.label ?? "Choose a project" }}
+                    hint={projects!.length ? undefined : "No open projects yet. Create a project first."}
+                  />
+                )}
                 <FormikTextField name="title" label="Title" placeholder="Demo day, Inspection, Cabinet install…" autoFocus />
                 <FieldRow>
                   <FormikTextField
@@ -330,10 +357,10 @@ function EventDialog({
         title={`Delete "${event?.title}"?`}
         confirmLabel="Delete"
         onConfirm={async () => {
-          await api.deleteEvent(event!.id);
+          await api!.deleteEvent(event!.id);
           onSaved("Removed from schedule");
         }}
       />
-    </Dialog>
+    </FormDrawer>
   );
 }

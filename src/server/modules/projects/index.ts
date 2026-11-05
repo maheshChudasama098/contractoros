@@ -1,5 +1,5 @@
 // Public API of the projects module. Only import from this file outside the module.
-export { eventService } from "./event.service";
+export { eventService, toEventDto, toInstant } from "./event.service";
 export { expenseService } from "./expense.service";
 export { projectFileService } from "./file.service";
 export { noteService } from "./note.service";

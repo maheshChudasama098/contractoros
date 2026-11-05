@@ -73,7 +73,11 @@ export const Invoice = sequelize.define(
     total: money(),
     amountPaid: money(false, 0),
     balanceDue: money(),
+    taxRate: { type: DataTypes.DECIMAL(6, 3), allowNull: false, defaultValue: 0 }, // percent, e.g. 8.250
     termsSnapshot: text(),
+    customerNotes: text(),
+    billToSnapshot: { type: DataTypes.JSONB, allowNull: true }, // customer name/address frozen at issue
+    voidReason: str(255),
     issuedAt: ts(),
     paidAt: ts(),
     voidedAt: ts(),
@@ -150,6 +154,12 @@ export const Payment = sequelize.define(
     failureMessage: text(),
     succeededAt: ts(),
     idempotencyKey: str(160, false),
+    // Manual (offline) payments recorded by staff
+    method: str(64), // master_items code (type payment_method)
+    reference: str(120),
+    paidOn: dateOnly(),
+    notes: text(),
+    recordedByUserId: fk(true),
   },
   {
     tableName: "payments",

@@ -6,7 +6,6 @@ import PeopleOutline from "@mui/icons-material/PeopleOutline";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -40,6 +39,7 @@ import {
   TabBar,
   TwoLine,
   type Sort,
+  FormDrawer,
 } from "@web/components/ui";
 import { v, Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
@@ -413,7 +413,7 @@ export function CustomerDialog({
   return (
     // stopPropagation: React bubbles submit through portals, so a dialog opened inside another form
     // (e.g. "New customer" from the project form) would otherwise submit the outer form too.
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm" onSubmit={(e) => e.stopPropagation()}>
+    <FormDrawer open onClose={onClose} onSubmit={(e) => e.stopPropagation()}>
       <Formik<CustomerForm>
         initialValues={initial}
         validationSchema={schema}
@@ -489,6 +489,6 @@ export function CustomerDialog({
           </Form>
         )}
       </Formik>
-    </Dialog>
+    </FormDrawer>
   );
 }

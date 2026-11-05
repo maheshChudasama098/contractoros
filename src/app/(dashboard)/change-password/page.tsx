@@ -1,5 +1,5 @@
-import { ChangePasswordView } from "@web/features/profile/ProfileView";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <ChangePasswordView />;
+  redirect("/settings?section=password");
 }

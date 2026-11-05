@@ -10,7 +10,10 @@ import {
   type CompanyStepInput,
   type LocationStepInput,
   type OnboardingState,
+  type OrganizationProfile,
+  type OrganizationProfileData,
 } from "@shared/contracts/onboarding";
+import { recordAudit } from "@server/core/audit/audit.service";
 import { IMAGE_EXT, readStoredFile, saveFile, sniffImageType } from "@server/core/storage/local-storage";
 
 async function loadOrg(ctx: TenantContext) {
@@ -106,11 +109,58 @@ export const onboardingService = {
     await org.update({ logoFileId: stored.get("id") });
   },
 
-  async getLogo(ctx: TenantContext) {
+  async getLogo(ctx: Pick<TenantContext, "organizationId">) {
     const org = await Organization.findByPk(ctx.organizationId, { attributes: ["logoFileId"] });
     const fileId = org?.get("logoFileId") as string | null;
     const file = fileId && (await StoredFile.findOne({ where: { id: fileId, organizationId: ctx.organizationId } }));
     if (!file) throw Errors.notFound("Logo");
     return { body: await readStoredFile(file.get("bucketKey") as string), mimeType: file.get("mimeType") as string };
+  },
+
+  // ---- Settings → Organization (after onboarding)
+
+  async getProfile(ctx: TenantContext): Promise<OrganizationProfile> {
+    const org = await loadOrg(ctx);
+    const g = (k: string) => (org.get(k) as string | null) ?? "";
+    return {
+      name: g("name"),
+      slug: g("slug"),
+      phone: g("phone"),
+      email: g("email"),
+      website: g("website"),
+      industryId: g("industryId"),
+      companySize: g("companySize"),
+      addressLine1: g("addressLine1"),
+      addressLine2: g("addressLine2"),
+      city: g("city"),
+      state: g("state"),
+      postalCode: g("postalCode"),
+      timezone: g("timezone"),
+      googleReviewUrl: g("googleReviewUrl"),
+      hasLogo: !!org.get("logoFileId"),
+    };
+  },
+
+  async updateProfile(ctx: TenantContext, input: OrganizationProfileData) {
+    const org = await loadOrg(ctx);
+    const [industryOk, sizeOk, tzOk] = await Promise.all([
+      masterService.isActiveValue("industry", input.industryId),
+      masterService.isActiveValue("company_size", input.companySize),
+      masterService.isActiveValue("time_zone", input.timezone),
+    ]);
+    if (!industryOk || !sizeOk || !tzOk)
+      throw Errors.validation({
+        ...(!industryOk && { industryId: ["Choose an industry."] }),
+        ...(!sizeOk && { companySize: ["Choose a company size."] }),
+        ...(!tzOk && { timezone: ["Choose a time zone."] }),
+      });
+    await org.update(input);
+    await recordAudit(ctx, { action: "organization.updated", entityType: "organization", entityId: ctx.organizationId });
+    return this.getProfile(ctx);
+  },
+
+  async removeLogo(ctx: TenantContext) {
+    const org = await loadOrg(ctx);
+    await org.update({ logoFileId: null });
   },
 };

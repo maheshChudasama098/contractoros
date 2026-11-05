@@ -6,7 +6,6 @@ import TuneOutlined from "@mui/icons-material/TuneOutlined";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -36,6 +35,7 @@ import {
   StatusTag,
   TabBar,
   type Sort,
+  FormDrawer,
 } from "@web/components/ui";
 import { Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
@@ -303,7 +303,7 @@ function MasterDialog({
   });
 
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+    <FormDrawer open onClose={onClose} width={440}>
       <Formik<MasterForm>
         initialValues={{
           name: item?.name ?? "",
@@ -362,6 +362,6 @@ function MasterDialog({
           </Form>
         )}
       </Formik>
-    </Dialog>
+    </FormDrawer>
   );
 }

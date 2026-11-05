@@ -1,5 +1,5 @@
-import { ProfileView } from "@web/features/profile/ProfileView";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <ProfileView />;
+  redirect("/settings?section=profile");
 }

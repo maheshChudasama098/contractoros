@@ -9,7 +9,6 @@ import UploadFileOutlined from "@mui/icons-material/UploadFileOutlined";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -25,10 +24,12 @@ import TableRow from "@mui/material/TableRow";
 import TableSortLabel from "@mui/material/TableSortLabel";
 import Tooltip from "@mui/material/Tooltip";
 import { Form, Formik } from "formik";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
 import { FieldRow, FormikSelect, FormikTextField } from "@web/components/form";
-import { EmptyState, KpiStrip, Muted, SectionCard, Segmented, StatusTag } from "@web/components/ui";
+import { EmptyState, KpiStrip, Muted, SectionCard, Segmented, StatusTag, FormDrawer } from "@web/components/ui";
 import { Yup } from "@web/lib/validation";
 import { tokens, type Tone } from "@web/theme/tokens";
 import type { MasterOption } from "@shared/contracts/masters";
@@ -56,7 +57,7 @@ export function FinancesTab({ project, api, onChanged }: { project: ProjectDto; 
         />
       </Box>
       {sub === "budget" && <Budget project={project} api={api} onChanged={onChanged} />}
-      {sub === "invoices" && <Invoices api={api} />}
+      {sub === "invoices" && <Invoices api={api} project={project} />}
       {sub === "change_orders" && <ChangeOrders api={api} />}
     </>
   );
@@ -281,7 +282,7 @@ function ExpenseDialog({
 }) {
   const isNew = !expense;
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+    <FormDrawer open onClose={onClose}>
       <Formik<ExpenseForm>
         initialValues={{
           expense_date: expense?.expense_date ?? todayYmd(),
@@ -349,23 +350,32 @@ function ExpenseDialog({
           </Form>
         )}
       </Formik>
-    </Dialog>
+    </FormDrawer>
   );
 }
 
-// ---------------------------------------------------------------- Invoices & change orders (read-only for now)
+// ---------------------------------------------------------------- Invoices & change orders
 
 const INVOICE_TONE: Record<string, Tone> = { draft: "neutral", issued: "info", partially_paid: "warning", paid: "success", overdue: "danger", void: "neutral" };
 const CO_TONE: Record<string, Tone> = { draft: "neutral", issued: "info", approved: "success", declined: "danger" };
 const label = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
-function Invoices({ api }: { api: ProjectDetailApi }) {
+function Invoices({ api, project }: { api: ProjectDetailApi; project: ProjectDto }) {
+  const router = useRouter();
   const [rows, setRows] = useState<ProjectInvoiceDto[] | null>(null);
   useEffect(() => void api.invoices().then(setRows).catch(() => setRows([])), [api]);
+  const newHref = `/invoices?new=1&customer=${project.customer.id}&customer_name=${encodeURIComponent(project.customer.display_name)}&project=${project.id}`;
   return (
-    <SectionCard title="Invoices">
+    <SectionCard
+      title="Invoices"
+      action={
+        <Button size="small" variant="outlined" startIcon={<AddOutlined />} component={Link} href={newHref}>
+          New invoice
+        </Button>
+      }
+    >
       {rows && rows.length === 0 ? (
-        <EmptyState icon={<ReceiptLongOutlined />} title="No invoices yet" body="Invoices for this project will show here once the Invoices module is set up." />
+        <EmptyState icon={<ReceiptLongOutlined />} title="No invoices yet" body="Bill this project's customer for a deposit, progress payment or the final amount." />
       ) : (
         <TableContainer>
           <Table>
@@ -382,7 +392,7 @@ function Invoices({ api }: { api: ProjectDetailApi }) {
             </TableHead>
             <TableBody>
               {(rows ?? []).map((i) => (
-                <TableRow key={i.id}>
+                <TableRow key={i.id} hover sx={{ cursor: "pointer" }} onClick={() => router.push(`/invoices/${i.id}`)}>
                   <TableCell sx={{ fontWeight: 500 }}>{i.invoice_number}</TableCell>
                   <TableCell>
                     <StatusTag tone={INVOICE_TONE[i.status] ?? "neutral"}>{label(i.status)}</StatusTag>

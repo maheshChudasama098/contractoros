@@ -5,8 +5,10 @@ import {
   bool,
   createdOnly,
   currency,
+  dateOnly,
   enumOf,
   fk,
+  inet,
   int,
   json,
   money,
@@ -64,7 +66,10 @@ export const EstimateVersion = sequelize.define(
     internalCostTotal: money(true),
     marginAmount: money(true),
     taxSnapshot: json(),
+    taxRate: { type: DataTypes.DECIMAL(6, 3), allowNull: false, defaultValue: 0 }, // percent
     termsSnapshot: text(),
+    customerNotes: text(),
+    validUntil: dateOnly(),
     issuedAt: ts(),
     createdByUserId: fk(),
   },
@@ -90,6 +95,7 @@ export const EstimateItem = sequelize.define(
     unitPrice: money(),
     lineSubtotal: money(),
     taxable: bool(true),
+    taxAmount: money(false, 0),
     internalUnitCost: money(true),
     internalLineCost: money(true),
   },
@@ -109,8 +115,15 @@ export const Proposal = sequelize.define(
     publicTokenHash: { ...str(255), unique: true },
     expiresAt: ts(),
     sentAt: ts(),
+    viewedAt: ts(),
     acceptedAt: ts(),
     declinedAt: ts(),
+    withdrawnAt: ts(),
+    message: text(), // cover note shown to the customer
+    declineReason: str(500),
+    acceptedByName: str(160),
+    acceptedByEmail: str(254),
+    acceptedIp: inet(),
     createdByUserId: fk(),
   },
   {
@@ -139,6 +152,16 @@ export const Contract = sequelize.define(
     signatureProvider: str(40),
     providerEnvelopeId: str(160),
     signedAt: ts(),
+    title: str(180),
+    contractValue: money(false, 0),
+    body: text(), // agreement text (editable while draft)
+    signerName: str(160),
+    signerEmail: str(254),
+    snapshot: json(), // frozen document sent for signature
+    documentHash: str(64), // sha256 of the frozen snapshot
+    sentAt: ts(),
+    voidedAt: ts(),
+    voidReason: str(255),
     createdByUserId: fk(),
   },
   {
@@ -162,6 +185,15 @@ export const SignatureRequest = sequelize.define(
     signerName: str(160, false),
     signerEmail: str(254, false),
     status: enumOf(E.SignatureRequestStatus, "created"),
+    tokenHash: { ...str(64), unique: true },
+    expiresAt: ts(),
+    documentHash: str(64), // document the signer was shown
+    signedName: str(160),
+    signatureType: str(16), // typed | drawn
+    signatureImage: text(), // PNG data URL when drawn
+    signerIp: inet(),
+    signerUserAgent: text(),
+    declineReason: str(500),
     sentAt: ts(),
     completedAt: ts(),
   },

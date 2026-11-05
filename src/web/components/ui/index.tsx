@@ -2,6 +2,7 @@
 
 import Box, { type BoxProps } from "@mui/material/Box";
 import Card from "@mui/material/Card";
+import Drawer from "@mui/material/Drawer";
 import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import MenuItem from "@mui/material/MenuItem";
@@ -516,7 +517,7 @@ export function Pager({
 
 /**
  * Standard list layout: status tabs above the card; inside the card a toolbar with
- * filters on the left and search on the right, then the table (or empty state) and pager.
+ * search on the left and filters on the right, then the table (or empty state) and pager.
  * The page's primary action lives in its PageHeader, not here.
  */
 export function ListCard({
@@ -542,8 +543,12 @@ export function ListCard({
             gap={1}
             sx={{ px: 2.5, py: 1.25, borderBottom: `1px solid ${tokens.divider}` }}
           >
-            {filters}
-            <Box sx={{ ml: "auto", display: "flex", flex: "1 1 260px", justifyContent: "flex-end", minWidth: 0 }}>{search}</Box>
+            <Box sx={{ display: "flex", flex: "1 1 260px", minWidth: 0 }}>{search}</Box>
+            {filters && (
+              <Stack direction="row" flexWrap="wrap" alignItems="center" gap={1} sx={{ ml: "auto" }}>
+                {filters}
+              </Stack>
+            )}
           </Stack>
         )}
         {children}
@@ -632,4 +637,47 @@ export function sortRows<T, K extends string>(rows: T[], sort: Sort<K>, value: (
     if (y == null || y === "") return -1;
     return sign * (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true }));
   });
+}
+
+/**
+ * Right-side panel for add/edit forms. Drop-in for `<Dialog>`: children use
+ * DialogTitle / DialogContent / DialogActions (inside a Formik <Form> or not);
+ * the title and actions stay pinned while the content scrolls.
+ */
+export function FormDrawer({
+  open,
+  onClose,
+  width = 520,
+  children,
+  onSubmit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  width?: number;
+  children: ReactNode;
+  onSubmit?: React.FormEventHandler<HTMLDivElement>;
+}) {
+  return (
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      onSubmit={onSubmit}
+      slotProps={{
+        paper: {
+          sx: {
+            width: { xs: "100%", sm: width },
+            display: "flex",
+            flexDirection: "column",
+            "& > form": { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 },
+            "& .MuiDialogTitle-root": { px: 3, py: 2, borderBottom: `1px solid ${tokens.divider}` },
+            "& .MuiDialogContent-root": { flex: 1, overflowY: "auto", px: 3, pt: "20px !important", pb: 3 },
+            "& .MuiDialogActions-root": { px: 3, py: 1.5, borderTop: `1px solid ${tokens.divider}`, mt: "auto" },
+          },
+        },
+      }}
+    >
+      {children}
+    </Drawer>
+  );
 }

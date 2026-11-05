@@ -1,12 +1,12 @@
 "use client";
 
+import Dialog from "@mui/material/Dialog";
 import MoreHorizOutlined from "@mui/icons-material/MoreHorizOutlined";
 import ContentCopyOutlined from "@mui/icons-material/ContentCopyOutlined";
 import PersonAddAltOutlined from "@mui/icons-material/PersonAddAltOutlined";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -39,6 +39,7 @@ import {
   TabBar,
   TwoLine,
   type Sort,
+  FormDrawer,
 } from "@web/components/ui";
 import { v, Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
@@ -387,7 +388,7 @@ function UserDialog({
   });
 
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+    <FormDrawer open onClose={onClose}>
       <Formik<UserForm>
         initialValues={{
           name: member?.name ?? "",
@@ -483,7 +484,7 @@ function UserDialog({
           </Form>
         )}
       </Formik>
-    </Dialog>
+    </FormDrawer>
   );
 }
 

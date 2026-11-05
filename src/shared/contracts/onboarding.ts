@@ -40,3 +40,34 @@ export type OnboardingState = {
   location: Partial<LocationStepInput>;
   branding: { googleReviewUrl: string | null; hasLogo: boolean };
 };
+
+const optional = (max: number) =>
+  z.string().trim().max(max).nullish().transform((v) => v || null);
+
+/** Settings → Organization: everything onboarding collects, editable afterwards. */
+export const OrganizationProfileInput = CompanyStepInput.merge(LocationStepInput).extend({
+  email: z.string().trim().max(254).email("Enter a valid email.").or(z.literal("")).nullish().transform((v) => v || null),
+  website: z.string().trim().max(255).url("Enter a full link, like https://example.com").or(z.literal("")).nullish().transform((v) => v || null),
+  addressLine2: optional(180),
+  googleReviewUrl: BrandingStepInput.shape.googleReviewUrl,
+});
+export type OrganizationProfileInput = z.input<typeof OrganizationProfileInput>;
+export type OrganizationProfileData = z.output<typeof OrganizationProfileInput>;
+
+export type OrganizationProfile = {
+  name: string;
+  slug: string;
+  phone: string;
+  email: string;
+  website: string;
+  industryId: string;
+  companySize: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  timezone: string;
+  googleReviewUrl: string;
+  hasLogo: boolean;
+};

@@ -1,6 +1,7 @@
 "use client";
 
 import KeyboardArrowDownOutlined from "@mui/icons-material/KeyboardArrowDownOutlined";
+import SettingsOutlined from "@mui/icons-material/SettingsOutlined";
 import LockOutlined from "@mui/icons-material/LockOutlined";
 import LogoutOutlined from "@mui/icons-material/LogoutOutlined";
 import PersonOutline from "@mui/icons-material/PersonOutline";
@@ -63,17 +64,23 @@ export function UserMenu({ user, compact }: { user: ShellUser; compact?: boolean
           <Box sx={{ fontSize: 12.5, color: "text.secondary" }}>{user.email}</Box>
         </Box>
         <Divider />
-        <MenuItem component={Link} href="/profile" onClick={close}>
+        <MenuItem component={Link} href="/settings?section=profile" onClick={close}>
           <ListItemIcon>
             <PersonOutline fontSize="small" />
           </ListItemIcon>
           Profile
         </MenuItem>
-        <MenuItem component={Link} href="/change-password" onClick={close}>
+        <MenuItem component={Link} href="/settings?section=password" onClick={close}>
           <ListItemIcon>
             <LockOutlined fontSize="small" />
           </ListItemIcon>
           Change password
+        </MenuItem>
+        <MenuItem component={Link} href="/settings" onClick={close}>
+          <ListItemIcon>
+            <SettingsOutlined fontSize="small" />
+          </ListItemIcon>
+          Settings
         </MenuItem>
         <Divider />
         <MenuItem onClick={logout}>

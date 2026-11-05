@@ -141,10 +141,15 @@ export const projectDetailService = {
       where: { projectId, organizationId: ctx.organizationId },
       order: [["issueDate", "DESC"]],
     });
+    const today = new Date().toISOString().slice(0, 10);
     return rows.map((i) => ({
       id: i.get("id") as string,
       invoice_number: i.get("invoiceNumber") as string,
-      status: i.get("status") as string,
+      // Overdue is derived (unpaid and past due), never stored.
+      status:
+        ["issued", "partially_paid"].includes(i.get("status") as string) && (ymd(i.get("dueDate")) ?? "9999") < today
+          ? "overdue"
+          : (i.get("status") as string),
       issue_date: ymd(i.get("issueDate"))!,
       due_date: ymd(i.get("dueDate")),
       total: money2(i.get("total")),

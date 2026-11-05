@@ -16,3 +16,8 @@ export const POST = tenantRoute(async ({ req, ctx }) => {
   await onboardingService.uploadLogo(ctx, file);
   return { uploaded: true };
 });
+
+export const DELETE = tenantRoute(async ({ ctx }) => {
+  await onboardingService.removeLogo(ctx);
+  return { removed: true };
+});

@@ -25,6 +25,7 @@ export const PERMISSION_GROUPS: { group: string; items: { key: string; label: st
       { key: "estimate.write", label: "Create & edit estimates" },
       { key: "estimate.issue", label: "Issue estimates" },
       { key: "estimate.view_internal_cost", label: "View internal cost & margin" },
+      { key: "contract.void", label: "Void contracts" },
     ],
   },
   {
@@ -32,6 +33,8 @@ export const PERMISSION_GROUPS: { group: string; items: { key: string; label: st
     items: [
       { key: "project.read", label: "View projects" },
       { key: "project.write", label: "Create & edit projects" },
+      { key: "file.read", label: "View company files" },
+      { key: "file.write", label: "Upload & organize files" },
       { key: "change_order.write", label: "Create change orders" },
       { key: "change_order.approve", label: "Approve change orders" },
     ],

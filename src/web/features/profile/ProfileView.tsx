@@ -8,11 +8,10 @@ import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { Form, Formik } from "formik";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FieldRow, FormikPasswordField, FormikTextField } from "@web/components/form";
-import { InitialsAvatar, Muted, PageHeader, SectionCard } from "@web/components/ui";
+import { InitialsAvatar, Muted, SectionCard } from "@web/components/ui";
 import { ApiClientError } from "@web/lib/api-client";
 import { v, Yup } from "@web/lib/validation";
 import { authApi, authErrorMessage } from "@web/features/auth/api";
@@ -28,7 +27,7 @@ function applyErrors(err: unknown, setFieldError: (f: string, m: string) => void
   return authErrorMessage(err);
 }
 
-export function ProfileView() {
+export function ProfileSection() {
   const router = useRouter();
   const [me, setMe] = useState<AuthUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,15 +44,18 @@ export function ProfileView() {
 
   return (
     <>
-      <Stack direction="row" gap={2} alignItems="center">
-        <InitialsAvatar name={me.name} size={56} />
-        <Stack>
-          <Typography variant="h1">{me.name}</Typography>
-          <Muted>{me.email}</Muted>
-        </Stack>
-      </Stack>
-
-      <SectionCard title="Personal details" bodySx={{ p: 2.5 }}>
+      <SectionCard
+        title={
+          <Stack direction="row" gap={1.5} alignItems="center">
+            <InitialsAvatar name={me.name} size={40} />
+            <Stack>
+              <Typography variant="h3">Profile</Typography>
+              <Muted sx={{ fontSize: 13 }}>Your name and contact details.</Muted>
+            </Stack>
+          </Stack>
+        }
+        bodySx={{ p: 2.5 }}
+      >
         <Formik
           initialValues={{ name: me.name, phone: me.phone ?? "", email: me.email }}
           validationSchema={Yup.object({ name: v.required("Full name"), phone: v.phone() })}
@@ -78,8 +80,7 @@ export function ProfileView() {
                 <FormikTextField name="phone" label="Phone" type="tel" autoComplete="tel" placeholder="Optional" />
               </FieldRow>
               <FormikTextField name="email" label="Email" disabled hint="Your sign-in email can't be changed here." />
-              <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5}>
-                <Link href="/change-password">Change password</Link>
+              <Stack direction="row" justifyContent="flex-end" alignItems="center" gap={1.5}>
                 <Button type="submit" variant="contained" color="primary" disabled={!dirty || isSubmitting}>
                   Save changes
                 </Button>
@@ -101,14 +102,21 @@ const passwordSchema = Yup.object({
     .required("Confirm your new password."),
 });
 
-export function ChangePasswordView() {
+export function PasswordSection() {
   const [done, setDone] = useState(false);
 
   return (
     <>
-      <PageHeader title="Change password" subtitle="Other devices are signed out after you change it." />
-      <Box sx={{ maxWidth: 560, width: "100%" }}>
-        <SectionCard bodySx={{ p: 2.5 }}>
+      <Box>
+        <SectionCard
+          title={
+            <Stack>
+              <Typography variant="h3">Change password</Typography>
+              <Muted sx={{ fontSize: 13 }}>Other devices are signed out after you change it.</Muted>
+            </Stack>
+          }
+          bodySx={{ p: 2.5, "& form": { maxWidth: 520 } }}
+        >
           <Formik
             initialValues={{ currentPassword: "", newPassword: "", confirm: "" }}
             validationSchema={passwordSchema}
@@ -137,9 +145,6 @@ export function ChangePasswordView() {
                 />
                 <FormikPasswordField name="confirm" label="Confirm new password" autoComplete="new-password" />
                 <Stack direction="row" justifyContent="flex-end" gap={1}>
-                  <Button component={Link} href="/profile">
-                    Cancel
-                  </Button>
                   <Button type="submit" variant="contained" color="primary" disabled={isSubmitting}>
                     Update password
                   </Button>

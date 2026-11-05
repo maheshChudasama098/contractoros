@@ -8,11 +8,11 @@ import { projectAudit, requireProject, UUID } from "./project-scope";
 
 // Events are wall-clock times in the company's zone. They're stored as if UTC ("floating"),
 // so 9:00 entered is 9:00 shown, whatever the server or browser zone.
-const toInstant = (date: string, time: string | null) => new Date(`${date}T${time ?? "00:00"}:00Z`);
+export const toInstant = (date: string, time: string | null) => new Date(`${date}T${time ?? "00:00"}:00Z`);
 const datePart = (d: Date) => d.toISOString().slice(0, 10);
 const timePart = (d: Date) => d.toISOString().slice(11, 16);
 
-function toDto(e: Model): ProjectEventDto {
+export function toEventDto(e: Model): ProjectEventDto {
   const start = e.get("startAt") as Date;
   const end = e.get("endAt") as Date;
   const allDay = e.get("allDay") as boolean;
@@ -56,7 +56,7 @@ export const eventService = {
       order: [["startAt", "ASC"]],
       limit: 500,
     });
-    return rows.map(toDto);
+    return rows.map(toEventDto);
   },
 
   async upcoming(ctx: TenantContext, projectId: string, today: string, limit: number): Promise<ProjectEventDto[]> {
@@ -65,13 +65,13 @@ export const eventService = {
       order: [["startAt", "ASC"]],
       limit,
     });
-    return rows.map(toDto);
+    return rows.map(toEventDto);
   },
 
   async create(ctx: TenantContext, projectId: string, input: ProjectEventData): Promise<ProjectEventDto> {
     await requireProject(ctx, projectId, "project.write");
     const e = await ProjectEvent.create({ organizationId: ctx.organizationId, projectId, createdByUserId: ctx.userId, ...row(input) });
-    const dto = toDto(e);
+    const dto = toEventDto(e);
     await projectAudit(ctx, projectId, "schedule.created", { after: dto });
     return dto;
   },
@@ -79,9 +79,9 @@ export const eventService = {
   async update(ctx: TenantContext, projectId: string, id: string, input: ProjectEventData): Promise<ProjectEventDto> {
     await requireProject(ctx, projectId, "project.write");
     const e = await findEvent(ctx, projectId, id);
-    const before = toDto(e);
+    const before = toEventDto(e);
     await e.update(row(input));
-    const after = toDto(e);
+    const after = toEventDto(e);
     await projectAudit(ctx, projectId, "schedule.updated", { before, after });
     return after;
   },
@@ -89,7 +89,7 @@ export const eventService = {
   async remove(ctx: TenantContext, projectId: string, id: string): Promise<void> {
     await requireProject(ctx, projectId, "project.write");
     const e = await findEvent(ctx, projectId, id);
-    const before = toDto(e);
+    const before = toEventDto(e);
     await e.destroy();
     await projectAudit(ctx, projectId, "schedule.deleted", { before });
   },

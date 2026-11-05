@@ -41,6 +41,32 @@ export const DocumentLink = sequelize.define(
   },
 );
 
+// Company file library (Files module): nested folders holding uploaded files.
+export const FileFolder = sequelize.define(
+  "FileFolder",
+  {
+    id: uuidPk(),
+    organizationId: orgId(),
+    parentId: fk(true),
+    name: str(120, false),
+    createdByUserId: fk(),
+  },
+  { tableName: "file_folders", indexes: [{ fields: ["organization_id", "parent_id"] }] },
+);
+
+export const LibraryFile = sequelize.define(
+  "LibraryFile",
+  {
+    id: uuidPk(),
+    organizationId: orgId(),
+    folderId: fk(true),
+    fileId: fk(),
+    name: str(255, false),
+    createdByUserId: fk(),
+  },
+  { tableName: "library_files", indexes: [{ fields: ["organization_id", "folder_id"] }, { fields: ["file_id"] }] },
+);
+
 export const IntegrationConnection = sequelize.define(
   "IntegrationConnection",
   {

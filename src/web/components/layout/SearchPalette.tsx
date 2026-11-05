@@ -17,11 +17,21 @@ type SearchHit = { title: string; sub: string; kind: "Customer" | "Project" | "E
 
 // Modules were removed; repopulate as pages come back.
 const searchIndex: SearchHit[] = [];
-const CREATE: { label: string; href: string; keys?: string }[] = [];
+const CREATE: { label: string; href: string; keys?: string }[] = [
+  { label: "New estimate", href: "/estimates?new=1" },
+  { label: "New invoice", href: "/invoices?new=1" },
+];
 const GOTO = [
   { label: "Dashboard", href: "/dashboard", keys: "G D" },
   { label: "Customers", href: "/customers", keys: "G C" },
+  { label: "Estimates", href: "/estimates", keys: "G E" },
+  { label: "Proposals", href: "/proposals" },
+  { label: "Contracts", href: "/contracts" },
   { label: "Projects", href: "/projects", keys: "G P" },
+  { label: "Calendar", href: "/calendar", keys: "G K" },
+  { label: "Files", href: "/files", keys: "G F" },
+  { label: "Invoices", href: "/invoices", keys: "G I" },
+  { label: "Settings", href: "/settings", keys: "G S" },
   { label: "Users", href: "/users", keys: "G U" },
   { label: "Roles", href: "/roles", keys: "G R" },
 ];

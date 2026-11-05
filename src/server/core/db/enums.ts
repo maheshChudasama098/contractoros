@@ -38,7 +38,7 @@ export const ChangeOrderStatus = ["draft", "issued", "approved", "declined", "vo
 export const InvoiceStatus = ["draft", "issued", "partially_paid", "paid", "overdue", "void"] as const;
 export const InvoiceType = ["deposit", "progress", "final", "standard", "credit"] as const;
 export const PaymentScheduleStatus = ["planned", "invoiced", "paid", "cancelled"] as const;
-export const PaymentProvider = ["stripe"] as const;
+export const PaymentProvider = ["stripe", "manual"] as const;
 export const PaymentStatus = [
   "initiated",
   "pending",

@@ -49,6 +49,8 @@ const orgOwned: M[] = [
   P.ProjectTask,
   P.ProjectExpense,
   P.ProjectEvent,
+  X.FileFolder,
+  X.LibraryFile,
   P.Milestone,
   P.Crew,
   P.ScheduleAssignment,
@@ -188,12 +190,18 @@ ref(B.PaymentSchedule, S.Contract, "contractId", "contract");
 ref(B.PaymentSchedule, B.Invoice, "invoiceId", "invoice", { onDelete: "SET NULL" });
 ref(B.Payment, B.Invoice, "invoiceId", "invoice", { inverse: "payments" });
 ref(B.Payment, C.Customer, "customerId", "customer");
+ref(B.Payment, I.User, "recordedByUserId", "recordedBy", { onDelete: "SET NULL" });
 ref(B.Refund, B.Payment, "paymentId", "payment", { inverse: "refunds" });
 ref(B.Refund, I.User, "requestedByUserId", "requestedBy");
 
 // Files, integrations, notifications, portal
 ref(X.StoredFile, I.User, "uploadedByUserId", "uploadedBy", { onDelete: "SET NULL" });
 ref(X.DocumentLink, X.StoredFile, "fileId", "file", { inverse: "links" });
+ref(X.FileFolder, X.FileFolder, "parentId", "parent", { onDelete: "CASCADE", inverse: "children" });
+ref(X.FileFolder, I.User, "createdByUserId", "createdBy");
+ref(X.LibraryFile, X.FileFolder, "folderId", "folder", { onDelete: "CASCADE", inverse: "files" });
+ref(X.LibraryFile, X.StoredFile, "fileId", "file");
+ref(X.LibraryFile, I.User, "createdByUserId", "createdBy");
 ref(X.IntegrationConnection, I.User, "connectedByUserId", "connectedBy", { onDelete: "SET NULL" });
 ref(X.AuditLog, I.User, "actorUserId", "actor", { onDelete: "SET NULL" });
 ref(X.Notification, I.User, "recipientUserId", "recipient", { onDelete: "SET NULL" });

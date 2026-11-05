@@ -7,7 +7,6 @@ import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
-import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -20,7 +19,7 @@ import { Form, Formik } from "formik";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
 import { FieldRow, FormikSelect, FormikTextField } from "@web/components/form";
-import { EmptyState, Muted, SectionCard, Segmented, StatusTag } from "@web/components/ui";
+import { EmptyState, Muted, SectionCard, Segmented, StatusTag, FormDrawer } from "@web/components/ui";
 import { Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
 import { TASK_STATUS_LABELS, TASK_STATUSES, type AssigneeOption, type TaskDto, type TaskInput } from "@shared/contracts/project-detail";
@@ -206,7 +205,7 @@ function TaskDialog({
 }) {
   const isNew = !task;
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+    <FormDrawer open onClose={onClose}>
       <Formik<TaskForm>
         initialValues={{
           title: task?.title ?? "",
@@ -260,6 +259,6 @@ function TaskDialog({
           </Form>
         )}
       </Formik>
-    </Dialog>
+    </FormDrawer>
   );
 }

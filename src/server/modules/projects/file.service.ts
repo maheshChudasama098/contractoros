@@ -1,30 +1,12 @@
 import "server-only";
-import path from "node:path";
 import type { Model } from "sequelize";
 import { DocumentLink, StoredFile, User, sequelize } from "@server/core/db/models";
 import { Errors } from "@server/core/http/errors";
-import { deleteStoredFile, readStoredFile, saveFile, sniffImageType } from "@server/core/storage/local-storage";
+import { deleteStoredFile, readStoredFile, saveFile } from "@server/core/storage/local-storage";
+import { checkUpload, INLINE_TYPES as INLINE } from "@server/core/storage/upload-policy";
 import type { TenantContext } from "@server/core/tenancy/context";
 import { PROJECT_FILE_MAX_BYTES, type ProjectFileDto } from "@shared/contracts/project-detail";
 import { projectAudit, requireProject, UUID } from "./project-scope";
-
-/** Allowed uploads by extension. The mime type we store/serve comes from here, never from the browser. */
-const ALLOWED: Record<string, string> = {
-  pdf: "application/pdf",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp",
-  heic: "image/heic",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  xls: "application/vnd.ms-excel",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  csv: "text/csv",
-  txt: "text/plain",
-  dwg: "application/acad",
-};
-const INLINE = new Set(["image/png", "image/jpeg", "image/webp", "application/pdf"]);
 
 const include = [
   {
@@ -75,18 +57,7 @@ export const projectFileService = {
 
   async upload(ctx: TenantContext, projectId: string, file: File): Promise<ProjectFileDto> {
     await requireProject(ctx, projectId, "project.write");
-    if (file.size > PROJECT_FILE_MAX_BYTES) throw Errors.validation({ file: ["Files must be 20 MB or smaller."] });
-    const filename = path.basename(file.name).slice(0, 255) || "file";
-    const ext = path.extname(filename).slice(1).toLowerCase();
-    let mimeType = ALLOWED[ext];
-    if (!mimeType) throw Errors.validation({ file: ["Upload a PDF, photo, Word, Excel, CSV, text or DWG file."] });
-    const buf = Buffer.from(await file.arrayBuffer());
-    // Bytes must agree with the extension for types we can sniff (blocks e.g. HTML renamed to .png).
-    const sniffed = sniffImageType(buf);
-    if ((INLINE.has(mimeType) || sniffed) && sniffed !== mimeType) {
-      if (!(sniffed && INLINE.has(sniffed))) throw Errors.validation({ file: ["The file's contents don't match its extension."] });
-      mimeType = sniffed;
-    }
+    const { buf, filename, ext, mimeType } = await checkUpload(file, PROJECT_FILE_MAX_BYTES);
     const { key, checksum } = await saveFile(ctx.organizationId, `projects/${projectId}`, buf, ext);
     const id = await sequelize.transaction(async (transaction) => {
       const stored = await StoredFile.create(

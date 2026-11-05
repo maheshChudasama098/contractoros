@@ -8,7 +8,6 @@ import Alert from "@mui/material/Alert";
 import Autocomplete from "@mui/material/Autocomplete";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -45,6 +44,7 @@ import {
   TwoLine,
   money,
   type Sort,
+  FormDrawer,
 } from "@web/components/ui";
 import type { ListPage } from "@shared/contracts/api";
 import { Yup } from "@web/lib/validation";
@@ -572,7 +572,7 @@ export function ProjectDialog({
       };
 
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+    <FormDrawer open onClose={onClose}>
       <Formik<ProjectForm>
         initialValues={initial}
         validationSchema={schema}
@@ -648,6 +648,6 @@ export function ProjectDialog({
           </Form>
         )}
       </Formik>
-    </Dialog>
+    </FormDrawer>
   );
 }
