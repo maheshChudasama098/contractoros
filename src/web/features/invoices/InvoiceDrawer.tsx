@@ -21,7 +21,7 @@ import Typography from "@mui/material/Typography";
 import { FieldArray, Form, Formik, getIn, useField, useFormikContext } from "formik";
 import { useEffect, useMemo, useState } from "react";
 import { FieldRow, FormikSelect, FormikTextField } from "@web/components/form";
-import { FormDrawer, KeyValue, Muted, TwoLine } from "@web/components/ui";
+import { FormDrawer, KeyValue, Muted, OptionLabel } from "@web/components/ui";
 import { Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
 import type { CustomerDto } from "@shared/contracts/customers";
@@ -470,7 +470,7 @@ function CustomerField({ initial }: { initial: { id: string; display_name: strin
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         renderOption={({ key, ...props }, o) => (
           <li key={o.id} {...props}>
-            <TwoLine title={o.display_name} sub={[o.email, o.billing_city].filter(Boolean).join(" · ") || undefined} />
+            <OptionLabel primary={o.display_name} secondary={o.email || o.billing_city || undefined} />
           </li>
         )}
         noOptionsText={input ? "No matching customers" : "No active customers yet"}

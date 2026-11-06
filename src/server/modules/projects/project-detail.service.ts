@@ -38,6 +38,10 @@ function summarize(action: string, before: Snap, after: Snap): string {
   switch (action) {
     case "project.created":
       return "Created the project";
+    case "share_link.created":
+      return `Created a share link for ${q(a.label)}`;
+    case "share_link.revoked":
+      return `Turned off the share link for ${q(b.label)}`;
     case "project.updated":
       return b.status !== a.status && a.status
         ? `Changed status to ${PROJECT_STATUS_LABELS[a.status as ProjectStatus] ?? a.status}`
@@ -130,7 +134,10 @@ export const projectDetailService = {
       id: r.get("id") as string,
       action: r.get("action") as string,
       summary: summarize(r.get("action") as string, r.get("beforeSnapshot") as Snap, r.get("afterSnapshot") as Snap),
-      actor: ((r.get("actor") as Model | null)?.get("name") as string | undefined) ?? null,
+      // Changes made through a shared link have no user; show who they said they were.
+      actor:
+        ((r.get("actor") as Model | null)?.get("name") as string | undefined) ??
+        ((r.get("afterSnapshot") as Snap)?.by_name ? `${(r.get("afterSnapshot") as Snap)!.by_name} (shared link)` : null),
       created_at: (r.get("createdAt") as Date).toISOString(),
     }));
   },

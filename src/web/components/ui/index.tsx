@@ -285,6 +285,26 @@ export function TwoLine({ title, sub, href }: { title: ReactNode; sub?: ReactNod
   );
 }
 
+/**
+ * Dropdown option with a muted second line (e.g. customer name + email). Sized for menus,
+ * unlike TwoLine (table cells): no extra height, long text truncates instead of wrapping.
+ */
+export function OptionLabel({ primary, secondary }: { primary: ReactNode; secondary?: ReactNode }) {
+  const line = { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
+  return (
+    <Box component="span" sx={{ display: "block", minWidth: 0, flex: 1 }}>
+      <Box component="span" sx={{ ...line, fontWeight: 500, fontSize: 13.5, lineHeight: 1.35, color: tokens.ink }}>
+        {primary}
+      </Box>
+      {secondary && (
+        <Box component="span" sx={{ ...line, fontSize: 12, lineHeight: 1.3, color: "text.secondary" }}>
+          {secondary}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 /** Pill-style segmented control (`role=group` toggles in the design). */
 export function Segmented<T extends string>({
   value,
@@ -666,7 +686,7 @@ export function FormDrawer({
       slotProps={{
         paper: {
           sx: {
-            width: { xs: "100%", sm: width },
+            width: { xs: "100%", sm: `min(${width}px, 100vw)` },
             display: "flex",
             flexDirection: "column",
             "& > form": { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 },

@@ -23,6 +23,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TableSortLabel from "@mui/material/TableSortLabel";
 import Tooltip from "@mui/material/Tooltip";
+import { useProjectAccess } from "./access";
 import { Form, Formik } from "formik";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -36,7 +37,7 @@ import type { MasterOption } from "@shared/contracts/masters";
 import type { ExpenseDto, ExpenseInput, ProjectChangeOrderDto, ProjectInvoiceDto } from "@shared/contracts/project-detail";
 import type { ProjectDto } from "@shared/contracts/projects";
 import { applyApiError } from "@web/features/customers/api";
-import { fmtDay, masterOptions, todayYmd, usd, type ProjectDetailApi } from "./api";
+import { fmtDay, todayYmd, usd, type ProjectDetailApi } from "./api";
 
 type Sub = "budget" | "invoices" | "change_orders";
 
@@ -73,6 +74,7 @@ function Budget({ project, api, onChanged }: { project: ProjectDto; api: Project
   const [methods, setMethods] = useState<MasterOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "expense_date", dir: "desc" });
+  const access = useProjectAccess();
   const [editing, setEditing] = useState<ExpenseDto | "new" | null>(null);
   const [deleting, setDeleting] = useState<ExpenseDto | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -80,7 +82,7 @@ function Budget({ project, api, onChanged }: { project: ProjectDto; api: Project
   const [receiptFor, setReceiptFor] = useState<ExpenseDto | null>(null);
 
   const load = useCallback(() => {
-    Promise.all([api.expenses(), masterOptions("expense_category"), masterOptions("payment_method")])
+    Promise.all([api.expenses(), api.options("expense_category"), api.options("payment_method")])
       .then(([e, c, m]) => (setExpenses(e), setCategories(c), setMethods(m), setError(null)))
       .catch((err: Error) => setError(err.message));
   }, [api]);
@@ -151,9 +153,11 @@ function Budget({ project, api, onChanged }: { project: ProjectDto; api: Project
       <SectionCard
         title="Expenses"
         action={
-          <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
-            Add expense
-          </Button>
+          access.edit && (
+            <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
+              Add expense
+            </Button>
+          )
         }
       >
         {expenses && expenses.length === 0 ? (
@@ -191,6 +195,8 @@ function Budget({ project, api, onChanged }: { project: ProjectDto; api: Project
                             <AttachFileOutlined fontSize="small" sx={{ color: tokens.brand }} />
                           </IconButton>
                         </Tooltip>
+                      ) : !access.edit ? (
+                        <Muted>—</Muted>
                       ) : (
                         <Tooltip title="Attach receipt">
                           <IconButton size="small" aria-label="Attach receipt" onClick={() => (setReceiptFor(e), fileInput.current?.click())}>
@@ -200,12 +206,13 @@ function Budget({ project, api, onChanged }: { project: ProjectDto; api: Project
                       )}
                     </TableCell>
                     <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                      {access.edit && (<>
                       <IconButton size="small" aria-label="Edit expense" onClick={() => setEditing(e)}>
                         <EditOutlined fontSize="small" />
                       </IconButton>
                       <IconButton size="small" aria-label="Delete expense" onClick={() => setDeleting(e)}>
                         <DeleteOutline fontSize="small" sx={{ color: tokens.danger }} />
-                      </IconButton>
+                      </IconButton></>)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -362,6 +369,7 @@ const label = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUppe
 
 function Invoices({ api, project }: { api: ProjectDetailApi; project: ProjectDto }) {
   const router = useRouter();
+  const access = useProjectAccess();
   const [rows, setRows] = useState<ProjectInvoiceDto[] | null>(null);
   useEffect(() => void api.invoices().then(setRows).catch(() => setRows([])), [api]);
   const newHref = `/invoices?new=1&customer=${project.customer.id}&customer_name=${encodeURIComponent(project.customer.display_name)}&project=${project.id}`;
@@ -369,9 +377,11 @@ function Invoices({ api, project }: { api: ProjectDetailApi; project: ProjectDto
     <SectionCard
       title="Invoices"
       action={
-        <Button size="small" variant="outlined" startIcon={<AddOutlined />} component={Link} href={newHref}>
-          New invoice
-        </Button>
+        access.edit && (
+          <Button size="small" variant="outlined" startIcon={<AddOutlined />} component={Link} href={newHref}>
+            New invoice
+          </Button>
+        )
       }
     >
       {rows && rows.length === 0 ? (
@@ -392,7 +402,7 @@ function Invoices({ api, project }: { api: ProjectDetailApi; project: ProjectDto
             </TableHead>
             <TableBody>
               {(rows ?? []).map((i) => (
-                <TableRow key={i.id} hover sx={{ cursor: "pointer" }} onClick={() => router.push(`/invoices/${i.id}`)}>
+                <TableRow key={i.id} hover={access.edit} sx={{ cursor: access.edit ? "pointer" : "default" }} onClick={() => access.edit && router.push(`/invoices/${i.id}`)}>
                   <TableCell sx={{ fontWeight: 500 }}>{i.invoice_number}</TableCell>
                   <TableCell>
                     <StatusTag tone={INVOICE_TONE[i.status] ?? "neutral"}>{label(i.status)}</StatusTag>

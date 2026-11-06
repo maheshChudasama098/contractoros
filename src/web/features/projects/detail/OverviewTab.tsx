@@ -13,6 +13,7 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import { useProjectAccess } from "./access";
 import { useCallback, useEffect, useState } from "react";
 import { InitialsAvatar, KpiStrip, Muted, SectionCard, StatusTag } from "@web/components/ui";
 import { tokens, type Tone } from "@web/theme/tokens";
@@ -207,6 +208,7 @@ export function OverviewTab({
 
 function NotesCard({ api, onChanged }: { api: ProjectDetailApi; onChanged: () => void }) {
   const [notes, setNotes] = useState<NoteDto[] | null>(null);
+  const access = useProjectAccess();
   const [adding, setAdding] = useState(false);
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -237,7 +239,7 @@ function NotesCard({ api, onChanged }: { api: ProjectDetailApi; onChanged: () =>
     <SectionCard
       title="Project notes"
       action={
-        !adding && (
+        !adding && access.edit && (
           <Button variant="text" size="small" startIcon={<AddOutlined />} sx={linkBtn} onClick={() => setAdding(true)}>
             Add note
           </Button>
@@ -268,7 +270,7 @@ function NotesCard({ api, onChanged }: { api: ProjectDetailApi; onChanged: () =>
       {notes && notes.length === 0 && !adding && (
         <Stack alignItems="center" gap={1} sx={{ py: 3, bgcolor: tokens.surfaceMuted, borderRadius: "10px", color: "text.secondary" }}>
           <ChatBubbleOutlineOutlined sx={{ fontSize: 20 }} />
-          <Box sx={{ fontSize: 13 }}>No notes yet. Click &quot;Add note&quot; to get started.</Box>
+          <Box sx={{ fontSize: 13 }}>{access.edit ? <>No notes yet. Click &quot;Add note&quot; to get started.</> : "No notes yet."}</Box>
         </Stack>
       )}
       <Stack gap={1.5}>
@@ -276,7 +278,7 @@ function NotesCard({ api, onChanged }: { api: ProjectDetailApi; onChanged: () =>
           <Box key={n.id} sx={{ bgcolor: tokens.surfaceMuted, border: `1px solid ${tokens.divider}`, borderRadius: "10px", p: 1.5 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1}>
               <Typography sx={{ whiteSpace: "pre-wrap", fontSize: 13.5, flex: 1 }}>{n.body}</Typography>
-              <IconButton
+              {access.edit && <IconButton
                 size="small"
                 aria-label="Delete note"
                 onClick={async () => {
@@ -285,7 +287,7 @@ function NotesCard({ api, onChanged }: { api: ProjectDetailApi; onChanged: () =>
                 }}
               >
                 <DeleteOutline sx={{ fontSize: 17 }} />
-              </IconButton>
+              </IconButton>}
             </Stack>
             <Muted sx={{ fontSize: 12, mt: 0.5 }}>
               {n.author ?? "Someone"} · {fmtWhen(n.created_at)}

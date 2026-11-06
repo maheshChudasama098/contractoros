@@ -233,6 +233,7 @@ export const CustomerPortalLink = sequelize.define(
     projectId: fk(),
     customerId: fk(true),
     tokenHash: { ...str(255, false), unique: true },
+    label: str(120), // who the link is for, e.g. "Homeowner" or "Tile crew"
     permissions: { type: DataTypes.JSONB, allowNull: false, defaultValue: { read_project: true } },
     expiresAt: ts(),
     lastAccessedAt: ts(),

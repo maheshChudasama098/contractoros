@@ -126,19 +126,24 @@ export const theme = createTheme({
     MuiAutocomplete: {
       styleOverrides: {
         // Autocomplete adds its own root padding on top of the 40px input; drop it so it matches text fields.
+        // Extra class repeats beat MUI's own `.MuiAutocomplete-hasPopupIcon.MuiAutocomplete-hasClearIcon .MuiOutlinedInput-root` rules.
         inputRoot: {
-          "&&": { padding: 0, paddingRight: 64 },
-          "& .MuiAutocomplete-input": { "&&": { padding: "0 12px", height: 40 } },
+          "&&&&": { padding: 0, paddingRight: 64 },
+          "& .MuiAutocomplete-input.MuiAutocomplete-input.MuiAutocomplete-input": { padding: "0 12px", height: 40, boxSizing: "border-box" },
         },
         endAdornment: { right: 8 },
         paper: { marginTop: 6, border: `1px solid ${tokens.border}`, borderRadius: 10, boxShadow: "0 8px 24px rgba(16,24,40,.12)" },
         listbox: {
           padding: 6,
           maxHeight: 320,
+          // Same metrics as MuiMenuItem (the compact select) so both dropdown kinds look alike.
           "& .MuiAutocomplete-option": {
             borderRadius: 6,
-            padding: "8px 10px",
-            minHeight: 0,
+            padding: "6px 10px",
+            minHeight: 36,
+            fontSize: 13.5,
+            lineHeight: 1.35,
+            userSelect: "none",
             "&.Mui-focused": { backgroundColor: tokens.hover },
             '&[aria-selected="true"], &[aria-selected="true"].Mui-focused': { backgroundColor: tokens.brandSoft },
           },

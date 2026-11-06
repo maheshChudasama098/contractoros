@@ -21,7 +21,7 @@ import Typography from "@mui/material/Typography";
 import { FieldArray, Form, Formik, getIn, useField, useFormikContext } from "formik";
 import { useEffect, useMemo, useState } from "react";
 import { FieldRow, FormikTextField } from "@web/components/form";
-import { FormDrawer, KeyValue, Muted, TwoLine } from "@web/components/ui";
+import { FormDrawer, KeyValue, Muted, OptionLabel } from "@web/components/ui";
 import { Yup } from "@web/lib/validation";
 import { tokens } from "@web/theme/tokens";
 import type { CustomerDto } from "@shared/contracts/customers";
@@ -143,7 +143,7 @@ export function EstimateDrawer({
       };
 
   return (
-    <FormDrawer open onClose={onClose} width={960}>
+    <FormDrawer open onClose={onClose} width={1120}>
       <Formik<Values>
         initialValues={initial}
         validationSchema={schema}
@@ -175,49 +175,82 @@ export function EstimateDrawer({
               {isNew ? "New estimate" : `Edit ${estimate.estimate_number} · version ${estimate.version.version_number}`}
             </DialogTitle>
             <DialogContent>
-              <Stack gap={3}>
+              <Stack gap={3.5}>
                 {status && <Alert severity="error">{status}</Alert>}
-                <Stack gap={2}>
-                  <FieldRow min={260}>
+
+                <Section n={1} title="Customer">
+                  <FieldRow min={280}>
                     <CustomerField initial={estimate?.customer ?? prefill?.customer ?? null} locked={!!estimate && estimate.versions.some((v) => v.issued_at)} />
                     <ProjectField />
                   </FieldRow>
-                  <FieldRow min={240}>
-                    <FormikTextField name="title" label="Title" placeholder="e.g. Kitchen remodel" />
-                    <FormikTextField name="valid_until" label="Valid until" type="date" hint="After this date the estimate shows as expired." />
-                  </FieldRow>
-                  <FormikTextField name="scope_description" label="Scope of work" placeholder="What's included, materials, exclusions…" multiline minRows={3} />
-                </Stack>
+                </Section>
 
-                <Stack gap={1}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="baseline">
-                    <Typography variant="h3">Line items</Typography>
-                    {canCost && <Muted sx={{ fontSize: 12.5 }}>“Your cost” is internal — customers never see it.</Muted>}
-                  </Stack>
+                <Section n={2} title="Estimate details">
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 2fr) minmax(180px, 1fr)" }, gap: 2, alignItems: "start" }}>
+                    <FormikTextField name="title" label="Title" placeholder="e.g. Kitchen remodel" />
+                    <FormikTextField name="valid_until" label="Valid until" type="date" />
+                  </Box>
+                  <FormikTextField name="scope_description" label="Scope of work" placeholder="What's included, materials, exclusions… (shown to the customer)" multiline minRows={3} />
+                </Section>
+
+                <Section
+                  n={3}
+                  title="Line items"
+                  aside={canCost ? <Muted sx={{ fontSize: 12.5 }}>&ldquo;Your cost&rdquo; is internal — customers never see it.</Muted> : undefined}
+                >
                   <FieldArray name="items">
                     {({ push, remove }) => (
-                      <Box sx={{ border: `1px solid ${tokens.border}`, borderRadius: "10px", overflow: "hidden" }}>
+                      <Box sx={{ border: `1px solid ${tokens.border}`, borderRadius: "10px", overflow: "hidden", bgcolor: "#fff" }}>
+                        <Box
+                          sx={{
+                            display: { xs: "none", md: "grid" },
+                            gridTemplateColumns: cols(canCost),
+                            gap: 1,
+                            px: 1.5,
+                            py: 1,
+                            bgcolor: tokens.surfaceMuted,
+                            borderBottom: `1px solid ${tokens.border}`,
+                            "& > span": { fontSize: 11.5, fontWeight: 600, color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.04em" },
+                          }}
+                        >
+                          <span>#</span>
+                          <span>Item</span>
+                          <span>Type</span>
+                          <span>Qty</span>
+                          <span>Unit</span>
+                          <span>Rate</span>
+                          {canCost && <span>Your cost</span>}
+                          <Box component="span" sx={{ textAlign: "center" }}>
+                            Tax
+                          </Box>
+                          <Box component="span" sx={{ textAlign: "right" }}>
+                            Amount
+                          </Box>
+                          <span />
+                        </Box>
                         {values.items.map((it, i) => (
                           <LineRow key={i} index={i} item={it} canCost={canCost} canRemove={values.items.length > 1} onRemove={() => remove(i)} />
                         ))}
-                        <Box sx={{ px: 1.5, py: 1 }}>
+                        <Box sx={{ px: 1.5, py: 1.25, bgcolor: tokens.surfaceMuted }}>
                           <Button size="small" startIcon={<AddOutlined />} onClick={() => push(blank())} disabled={values.items.length >= 200}>
-                            Add line
+                            Add line item
                           </Button>
                         </Box>
                       </Box>
                     )}
                   </FieldArray>
                   {typeof errors.items === "string" && touched.items && <FormHelperText error>{errors.items}</FormHelperText>}
-                </Stack>
+                </Section>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 340px" }, gap: 3, alignItems: "start" }}>
-                  <Stack gap={2}>
-                    <FormikTextField name="customer_notes" label="Note to customer" placeholder="Optional" multiline minRows={2} />
-                    <FormikTextField name="terms" label="Terms" placeholder="Optional · payment schedule, warranty…" multiline minRows={2} />
-                  </Stack>
-                  <TotalsPreview canCost={canCost} />
-                </Box>
+                <Section n={4} title="Notes & total">
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 360px" }, gap: 3, alignItems: "start" }}>
+                    <Stack gap={2}>
+                      <FormikTextField name="customer_notes" label="Note to customer" placeholder="Optional" multiline minRows={3} />
+                      <FormikTextField name="terms" label="Terms" placeholder="Optional · payment schedule, warranty…" multiline minRows={3} />
+                    </Stack>
+                    <TotalsPreview canCost={canCost} />
+                  </Box>
+                </Section>
               </Stack>
             </DialogContent>
             <DialogActions>
@@ -234,49 +267,157 @@ export function EstimateDrawer({
   );
 }
 
-const MAIN = "120px minmax(0, 1fr) 72px 64px 110px 40px 110px 36px";
+/** Column widths shared by the header and every line (desktop). */
+const cols = (canCost: boolean) =>
+  `24px minmax(0, 1fr) 116px 72px 64px 104px ${canCost ? "104px " : ""}44px 100px 36px`;
+
+function Section({ n, title, aside, children }: { n: number; title: string; aside?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Stack gap={1.5}>
+      <Stack direction="row" alignItems="center" gap={1.25}>
+        <Box
+          sx={{
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            bgcolor: tokens.brandSoft,
+            color: tokens.brand,
+            fontSize: 12,
+            fontWeight: 700,
+            display: "grid",
+            placeItems: "center",
+            flex: "none",
+          }}
+        >
+          {n}
+        </Box>
+        <Typography variant="h3" sx={{ flex: 1 }}>
+          {title}
+        </Typography>
+        {aside}
+      </Stack>
+      <Stack gap={2}>{children}</Stack>
+    </Stack>
+  );
+}
+
+/** Small caption above a field, only on narrow screens (desktop uses the header row). */
+const Cap = ({ children }: { children: React.ReactNode }) => (
+  <Box sx={{ display: { xs: "block", md: "none" }, fontSize: 11.5, fontWeight: 600, color: "text.secondary", mb: 0.5 }}>{children}</Box>
+);
 
 function LineRow({ index, item, canCost, canRemove, onRemove }: { index: number; item: Item; canCost: boolean; canRemove: boolean; onRemove: () => void }) {
   const { errors, touched, setFieldValue } = useFormikContext<Values>();
   const err = (k: keyof Item) => (getIn(touched, `items.${index}.${k}`) && getIn(errors, `items.${index}.${k}`)) as string | undefined;
   const ok = isQty(item.quantity) && isMoney(item.unit_price);
-  const amount = ok ? usd(fromCents(lineCents(item.quantity.trim(), toCents(item.unit_price.trim())))) : "—";
+  const amount = usd(ok ? fromCents(lineCents(item.quantity.trim(), toCents(item.unit_price.trim()))) : 0);
   const p = `items.${index}`;
   return (
-    <Box sx={{ px: 1.5, py: 1.25, borderBottom: `1px solid ${tokens.divider}`, "& .MuiInputBase-input": { py: "8px", fontSize: 14 } }}>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: MAIN }, gap: 1, alignItems: "start" }}>
-        <TextField select size="small" value={item.item_type} onChange={(e) => setFieldValue(`${p}.item_type`, e.target.value)} inputProps={{ "aria-label": "Type" }}>
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: { xs: "1fr 1fr", md: cols(canCost) },
+        gap: 1,
+        px: 1.5,
+        py: 1.25,
+        alignItems: "start",
+        borderBottom: `1px solid ${tokens.divider}`,
+        "&:hover": { bgcolor: "#FCFCFA" },
+        "& .MuiInputBase-input": { fontSize: 14 },
+        "& .MuiInputBase-inputSizeSmall:not(textarea)": { py: "8px" },
+      }}
+    >
+      <Box sx={{ display: { xs: "none", md: "flex" }, alignItems: "center", height: 40, fontSize: 13, color: "text.secondary", fontVariantNumeric: "tabular-nums" }}>{index + 1}</Box>
+      <Stack gap={0.75} sx={{ gridColumn: { xs: "1 / -1", md: "auto" }, minWidth: 0 }}>
+        <Cap>Item {index + 1}</Cap>
+        <Cell name={`${p}.name`} placeholder="Item name, e.g. Base cabinets" error={err("name")} label="Name" />
+        <Cell name={`${p}.description`} placeholder="Description (optional)" label="Description" multiline />
+      </Stack>
+      <Box>
+        <Cap>Type</Cap>
+        <TextField select size="small" fullWidth value={item.item_type} onChange={(e) => setFieldValue(`${p}.item_type`, e.target.value)} inputProps={{ "aria-label": "Type" }}>
           {ITEM_TYPES.map((t) => (
             <MenuItem key={t} value={t}>
               {ITEM_TYPE_LABELS[t]}
             </MenuItem>
           ))}
         </TextField>
-        <Cell name={`${p}.name`} placeholder="Item name" error={err("name")} label="Name" />
-        <Cell name={`${p}.quantity`} placeholder="Qty" error={err("quantity")} label="Quantity" decimal />
+      </Box>
+      <Box>
+        <Cap>Qty</Cap>
+        <Cell name={`${p}.quantity`} placeholder="1" error={err("quantity")} label="Quantity" decimal align="right" />
+      </Box>
+      <Box>
+        <Cap>Unit</Cap>
         <Cell name={`${p}.unit`} placeholder="ea" label="Unit" />
-        <Cell name={`${p}.unit_price`} placeholder="Rate" error={err("unit_price")} label="Rate" decimal adornment="$" />
+      </Box>
+      <Box>
+        <Cap>Rate</Cap>
+        <Cell name={`${p}.unit_price`} placeholder="0.00" error={err("unit_price")} label="Rate" decimal adornment="$" align="right" />
+      </Box>
+      {canCost && (
+        <Box>
+          <Cap>Your cost / unit</Cap>
+          <Cell name={`${p}.internal_unit_cost`} placeholder="—" error={err("internal_unit_cost")} label="Your cost per unit" decimal adornment="$" align="right" />
+        </Box>
+      )}
+      <Box>
+        <Cap>Tax</Cap>
         <Tooltip title="Taxable">
-          <Box sx={{ textAlign: "center" }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: { xs: "flex-start", md: "center" }, height: 40 }}>
             <TaxBox name={`${p}.taxable`} />
           </Box>
         </Tooltip>
-        <Box sx={{ textAlign: "right", pt: "9px", fontSize: 14, fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{amount}</Box>
-        <IconButton size="small" aria-label={`Remove line ${index + 1}`} onClick={onRemove} disabled={!canRemove} sx={{ mt: "3px" }}>
-          <DeleteOutline fontSize="small" />
-        </IconButton>
       </Box>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: canCost ? "120px minmax(0,1fr) 220px 76px" : "120px minmax(0,1fr) 76px" }, gap: 1, mt: 1 }}>
-        <Box sx={{ display: { xs: "none", md: "block" } }} />
-        <Cell name={`${p}.description`} placeholder="Description (optional, shown to customer)" label="Description" />
-        {canCost && <Cell name={`${p}.internal_unit_cost`} placeholder="Your cost / unit" error={err("internal_unit_cost")} label="Your cost per unit" decimal adornment="$" />}
-        <Box />
+      <Box>
+        <Cap>Amount</Cap>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            height: 40,
+            fontSize: 14,
+            fontVariantNumeric: "tabular-nums",
+            fontWeight: 600,
+            color: ok ? "text.primary" : "text.disabled",
+          }}
+        >
+          {amount}
+        </Box>
+      </Box>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", height: { md: 40 } }}>
+        <Tooltip title={canRemove ? "Remove line" : "An estimate needs at least one line"}>
+          <span>
+            <IconButton size="small" aria-label={`Remove line ${index + 1}`} onClick={onRemove} disabled={!canRemove}>
+              <DeleteOutline fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
       </Box>
     </Box>
   );
 }
 
-function Cell({ name, placeholder, error, label, decimal, adornment }: { name: string; placeholder: string; error?: string; label: string; decimal?: boolean; adornment?: string }) {
+function Cell({
+  name,
+  placeholder,
+  error,
+  label,
+  decimal,
+  adornment,
+  multiline,
+  align,
+}: {
+  name: string;
+  placeholder: string;
+  error?: string;
+  label: string;
+  decimal?: boolean;
+  adornment?: string;
+  multiline?: boolean;
+  align?: "right";
+}) {
   const [field] = useField(name);
   return (
     <TextField
@@ -284,10 +425,14 @@ function Cell({ name, placeholder, error, label, decimal, adornment }: { name: s
       value={field.value ?? ""}
       size="small"
       fullWidth
+      multiline={multiline}
+      minRows={multiline ? 1 : undefined}
+      maxRows={multiline ? 4 : undefined}
       placeholder={placeholder}
       error={!!error}
       helperText={error}
-      inputProps={{ inputMode: decimal ? "decimal" : undefined, "aria-label": label }}
+      sx={multiline ? { "& .MuiInputBase-root": { py: "7px", px: "12px", fontSize: 13 }, "& textarea": { fontSize: 13, lineHeight: 1.45 } } : undefined}
+      inputProps={{ inputMode: decimal ? "decimal" : undefined, "aria-label": label, style: align ? { textAlign: align } : undefined }}
       InputProps={adornment ? { startAdornment: <Box sx={{ color: "text.secondary", mr: 0.5 }}>{adornment}</Box> } : undefined}
     />
   );
@@ -407,7 +552,7 @@ function CustomerField({ initial, locked }: { initial: { id: string; display_nam
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         renderOption={({ key, ...props }, o) => (
           <li key={o.id} {...props}>
-            <TwoLine title={o.display_name} sub={[o.email, o.billing_city].filter(Boolean).join(" · ") || undefined} />
+            <OptionLabel primary={o.display_name} secondary={o.email || o.billing_city || undefined} />
           </li>
         )}
         noOptionsText={input ? "No matching customers" : "No active customers yet"}

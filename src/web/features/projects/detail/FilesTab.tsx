@@ -13,6 +13,7 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
+import { useProjectAccess } from "./access";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
 import { EmptyState, Muted, SectionCard, Segmented } from "@web/components/ui";
@@ -59,12 +60,13 @@ export function FilesTab({ api }: { api: ProjectDetailApi }) {
     setToast(failed.length ? `Not uploaded — ${failed.join("; ")}` : `${ok.length} file${ok.length === 1 ? "" : "s"} uploaded`);
   };
 
+  const access = useProjectAccess();
   const rows = (files ?? []).filter((f) => (filter === "all" ? true : filter === "photos" ? f.is_image : !f.is_image));
 
   return (
     <>
       {error && <Alert severity="error">{error}</Alert>}
-      <Box
+      {access.edit && (<Box
         onDragOver={(e) => (e.preventDefault(), setDragging(true))}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => (e.preventDefault(), setDragging(false), uploadAll(e.dataTransfer.files))}
@@ -87,7 +89,7 @@ export function FilesTab({ api }: { api: ProjectDetailApi }) {
         <Box sx={{ fontWeight: 600, mt: 0.5 }}>Drop files here or click to upload</Box>
         <Muted sx={{ fontSize: 12.5 }}>Photos, PDFs, Word, Excel, CSV, text or DWG · up to 20 MB each</Muted>
         {uploading > 0 && <LinearProgress sx={{ mx: "auto", mt: 1.5, maxWidth: 240 }} />}
-      </Box>
+      </Box>)}
       <input ref={input} type="file" multiple hidden accept={ACCEPT} onChange={(e) => uploadAll(e.target.files)} />
 
       <SectionCard
@@ -140,9 +142,9 @@ export function FilesTab({ api }: { api: ProjectDetailApi }) {
                   <IconButton size="small" component="a" href={api.fileUrl(f.id, true)} aria-label={`Download ${f.filename}`}>
                     <DownloadOutlined sx={{ fontSize: 18 }} />
                   </IconButton>
-                  <IconButton size="small" aria-label={`Delete ${f.filename}`} onClick={() => setDeleting(f)}>
+                  {access.edit && <IconButton size="small" aria-label={`Delete ${f.filename}`} onClick={() => setDeleting(f)}>
                     <DeleteOutline sx={{ fontSize: 18, color: tokens.danger }} />
-                  </IconButton>
+                  </IconButton>}
                 </Stack>
               </Box>
             ))}

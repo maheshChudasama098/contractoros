@@ -15,6 +15,7 @@ import IconButton from "@mui/material/IconButton";
 import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import { useProjectAccess } from "./access";
 import { Form, Formik } from "formik";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
@@ -51,7 +52,10 @@ export function ScheduleTab({ api, onChanged }: { api: ProjectDetailApi; onChang
   const [anchor, setAnchor] = useState(today);
   const [events, setEvents] = useState<ProjectEventDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<ProjectEventDto | { start_date: string } | null>(null);
+  const access = useProjectAccess();
+  const [editing, setEditingRaw] = useState<ProjectEventDto | { start_date: string } | null>(null);
+  // Read-only viewers can browse the calendar but not open the editor.
+  const setEditing = (v: ProjectEventDto | { start_date: string } | null) => (v === null || access.edit) && setEditingRaw(v);
   const [toast, setToast] = useState<string | null>(null);
 
   const days = useMemo(() => monthGrid(anchor), [anchor]);
@@ -88,9 +92,11 @@ export function ScheduleTab({ api, onChanged }: { api: ProjectDetailApi; onChang
               { value: "list", label: <Stack direction="row" gap={0.75} alignItems="center"><ViewListOutlined sx={{ fontSize: 17 }} />List</Stack> },
             ]}
           />
-          <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing({ start_date: today })}>
-            Create
-          </Button>
+          {access.edit && (
+            <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing({ start_date: today })}>
+              Create
+            </Button>
+          )}
         </Stack>
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}

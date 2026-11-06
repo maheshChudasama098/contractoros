@@ -6,3 +6,4 @@ export { noteService } from "./note.service";
 export { projectDetailService } from "./project-detail.service";
 export { projectService } from "./project.service";
 export { taskService } from "./task.service";
+export { shareService } from "./share.service";

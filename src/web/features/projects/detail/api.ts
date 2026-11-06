@@ -69,9 +69,51 @@ export const projectDetailApi = (projectId: string) => {
     notes: () => api<NoteDto[]>(`${base}/notes`),
     addNote: (body: string) => api<NoteDto>(`${base}/notes`, json("POST", { body })),
     deleteNote: (id: string) => del(`${base}/notes/${id}`),
+
+    options: (type: "expense_category" | "payment_method") => masterOptions(type),
   };
 };
 export type ProjectDetailApi = ReturnType<typeof projectDetailApi>;
+
+const viewOnly = () => Promise.reject(new ApiClientError(403, { code: "forbidden", message: "This link is view-only." } as ApiError["error"]));
+
+/**
+ * Same calls as `projectDetailApi`, through a share-link token: everything reads, only
+ * tasks write (with the visitor's name for the activity log). `byName` is asked once.
+ */
+export const sharedProjectApi = (token: string, byName: () => string): ProjectDetailApi => {
+  const base = `/portal/projects/${token}`;
+  const withName = (input: TaskInput) => ({ ...input, by_name: byName() });
+  return {
+    overview: () => api<ProjectOverview>(`${base}/overview`),
+    activity: () => api<ActivityDto[]>(`${base}/activity`),
+    invoices: () => api<ProjectInvoiceDto[]>(`${base}/invoices`),
+    changeOrders: () => api<ProjectChangeOrderDto[]>(`${base}/change-orders`),
+    tasks: () => api<TaskDto[]>(`${base}/tasks`),
+    assignees: () => api<AssigneeOption[]>(`${base}/assignees`),
+    createTask: (input: TaskInput) => api<TaskDto>(`${base}/tasks`, json("POST", withName(input))),
+    updateTask: (id: string, input: TaskInput) => api<TaskDto>(`${base}/tasks/${id}`, json("PUT", withName(input))),
+    deleteTask: viewOnly,
+    expenses: () => api<ExpenseDto[]>(`${base}/expenses`),
+    createExpense: viewOnly,
+    updateExpense: viewOnly,
+    deleteExpense: viewOnly,
+    uploadReceipt: viewOnly,
+    receiptUrl: (id: string) => `/api/v1${base}/expenses/${id}/receipt`,
+    events: (from: string, to: string) => api<ProjectEventDto[]>(`${base}/events?from=${from}&to=${to}`),
+    createEvent: viewOnly,
+    updateEvent: viewOnly,
+    deleteEvent: viewOnly,
+    files: () => api<ProjectFileDto[]>(`${base}/files`),
+    uploadFile: viewOnly,
+    fileUrl: (id: string, download = false) => `/api/v1${base}/files/${id}${download ? "?download=1" : ""}`,
+    deleteFile: viewOnly,
+    notes: () => api<NoteDto[]>(`${base}/notes`),
+    addNote: viewOnly,
+    deleteNote: viewOnly,
+    options: (type: "expense_category" | "payment_method") => api<MasterOption[]>(`${base}/masters/${type}`),
+  };
+};
 
 export const masterOptions = (type: "expense_category" | "payment_method") => api<MasterOption[]>(`/masters/${type}`);
 

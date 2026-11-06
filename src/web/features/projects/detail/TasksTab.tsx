@@ -15,6 +15,7 @@ import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
+import { useProjectAccess } from "./access";
 import { Form, Formik } from "formik";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@web/components/dialogs";
@@ -46,6 +47,7 @@ export function TasksTab({ api, onChanged }: { api: ProjectDetailApi; onChanged:
   const [filter, setFilter] = useState<Filter>("open");
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ el: HTMLElement; t: TaskDto } | null>(null);
+  const access = useProjectAccess();
   const [editing, setEditing] = useState<TaskDto | "new" | null>(null);
   const [deleting, setDeleting] = useState<TaskDto | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -95,9 +97,11 @@ export function TasksTab({ api, onChanged }: { api: ProjectDetailApi; onChanged:
                 { value: "all", label: "All" },
               ]}
             />
-            <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
-              Add task
-            </Button>
+            {access.tasks && (
+              <Button variant="contained" color="primary" startIcon={<AddOutlined />} onClick={() => setEditing("new")}>
+                Add task
+              </Button>
+            )}
           </Stack>
         }
       >
@@ -121,8 +125,8 @@ export function TasksTab({ api, onChanged }: { api: ProjectDetailApi; onChanged:
                   gap={1.25}
                   sx={{ px: 1.5, py: 1, borderBottom: `1px solid ${tokens.rowDivider}`, "&:hover": { bgcolor: tokens.surfaceMuted } }}
                 >
-                  <Checkbox checked={done} onChange={() => toggleDone(t)} inputProps={{ "aria-label": `Mark ${t.title} ${done ? "not done" : "done"}` }} />
-                  <Stack sx={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => setEditing(t)}>
+                  <Checkbox checked={done} disabled={!access.tasks} onChange={() => toggleDone(t)} inputProps={{ "aria-label": `Mark ${t.title} ${done ? "not done" : "done"}` }} />
+                  <Stack sx={{ flex: 1, minWidth: 0, cursor: access.tasks ? "pointer" : "default" }} onClick={() => access.tasks && setEditing(t)}>
                     <Box sx={{ fontWeight: 500, textDecoration: done ? "line-through" : "none", color: done ? "text.secondary" : tokens.ink }}>{t.title}</Box>
                     <Muted sx={{ fontSize: 12.5 }}>
                       {t.assignee?.name ?? "Unassigned"}
@@ -141,9 +145,9 @@ export function TasksTab({ api, onChanged }: { api: ProjectDetailApi; onChanged:
                     </StatusTag>
                   )}
                   <StatusTag tone={TASK_TONE[t.status]}>{TASK_STATUS_LABELS[t.status]}</StatusTag>
-                  <IconButton size="small" aria-label={`Actions for ${t.title}`} onClick={(e) => setMenu({ el: e.currentTarget, t })}>
+                  {access.tasks && <IconButton size="small" aria-label={`Actions for ${t.title}`} onClick={(e) => setMenu({ el: e.currentTarget, t })}>
                     <MoreHorizOutlined fontSize="small" />
-                  </IconButton>
+                  </IconButton>}
                 </Stack>
               );
             })}
@@ -153,9 +157,11 @@ export function TasksTab({ api, onChanged }: { api: ProjectDetailApi; onChanged:
 
       <Menu anchorEl={menu?.el} open={!!menu} onClose={() => setMenu(null)}>
         <MenuItem onClick={() => (setEditing(menu!.t), setMenu(null))}>Edit task</MenuItem>
-        <MenuItem onClick={() => (setDeleting(menu!.t), setMenu(null))} sx={{ color: tokens.danger }}>
-          Delete…
-        </MenuItem>
+        {access.deleteTasks && (
+          <MenuItem onClick={() => (setDeleting(menu!.t), setMenu(null))} sx={{ color: tokens.danger }}>
+            Delete…
+          </MenuItem>
+        )}
       </Menu>
 
       {editing && (

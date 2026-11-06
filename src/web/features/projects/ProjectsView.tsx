@@ -45,6 +45,7 @@ import {
   money,
   type Sort,
   FormDrawer,
+  OptionLabel,
 } from "@web/components/ui";
 import type { ListPage } from "@shared/contracts/api";
 import { Yup } from "@web/lib/validation";
@@ -484,7 +485,7 @@ function CustomerPicker({ initial }: { initial: { id: string; display_name: stri
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         renderOption={({ key, ...props }, o) => (
           <li key={o.id} {...props}>
-            <TwoLine title={o.display_name} sub={[o.email, o.billing_city].filter(Boolean).join(" · ") || undefined} />
+            <OptionLabel primary={o.display_name} secondary={o.email || o.billing_city || undefined} />
           </li>
         )}
         noOptionsText={

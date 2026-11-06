@@ -4,6 +4,7 @@ import ArrowBackOutlined from "@mui/icons-material/ArrowBackOutlined";
 import AttachMoneyOutlined from "@mui/icons-material/AttachMoneyOutlined";
 import CalendarMonthOutlined from "@mui/icons-material/CalendarMonthOutlined";
 import CheckOutlined from "@mui/icons-material/CheckOutlined";
+import IosShareOutlined from "@mui/icons-material/IosShareOutlined";
 import EditOutlined from "@mui/icons-material/EditOutlined";
 import FolderOutlined from "@mui/icons-material/FolderOutlined";
 import ForumOutlined from "@mui/icons-material/ForumOutlined";
@@ -38,6 +39,7 @@ import { ActivityTab } from "./ActivityTab";
 import { projectDetailApi } from "./api";
 import { FilesTab } from "./FilesTab";
 import { FinancesTab } from "./FinancesTab";
+import { ShareDrawer } from "./ShareDrawer";
 import { OverviewTab } from "./OverviewTab";
 import { ScheduleTab } from "./ScheduleTab";
 import { TasksTab } from "./TasksTab";
@@ -81,6 +83,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [statusMenu, setStatusMenu] = useState<HTMLElement | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -153,6 +156,9 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           >
             {PROJECT_STATUS_LABELS[project.status]}
           </Button>
+          <Button startIcon={<IosShareOutlined />} onClick={() => setSharing(true)}>
+            Share
+          </Button>
           <Button startIcon={<EditOutlined />} onClick={() => setEditing(true)}>
             Edit
           </Button>
@@ -163,6 +169,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       </Stack>
 
       <TabBar label="Project sections" value={tab} onChange={goTo} items={TAB_ITEMS} />
+      {sharing && <ShareDrawer projectId={project.id} projectName={project.name} onClose={() => setSharing(false)} />}
 
       {tab === "overview" && <OverviewTab overview={overview} api={api} goTo={goTo} onChanged={load} />}
       {tab === "tasks" && <TasksTab api={api} onChanged={load} />}
